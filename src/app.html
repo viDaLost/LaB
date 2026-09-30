@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Химлаб 118 — химическая 3D-игра: кампания из 29 миссий, коллекция из 90 реальных реакций, 118 элементов и управление температурой.">
+<meta name="theme-color" content="#15202b">
+<title>Химлаб 118</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Unbounded:wght@500;700;800&display=swap">
+<style>
+/*STYLES*/
+</style>
+</head>
+<body>
+<header class="gbar">
+  <div class="gbar-in">
+    <button class="logo" id="logo" type="button">Химлаб <b>118</b></button>
+    <nav class="nav" aria-label="Разделы">
+      <button type="button" data-go="map">Кампания</button>
+      <button type="button" data-go="free">Лаборатория</button>
+      <button type="button" data-go="col">Коллекция</button>
+      <button type="button" data-go="ach">Достижения</button>
+    </nav>
+    <div class="me">
+      <div class="lvl" id="meLvl">1</div>
+      <div class="me-txt"><span class="me-rank" id="meRank">Лаборант</span><div class="xpbar"><i id="meBar" style="width:0%"></i></div><span class="me-xp" id="meXp">0 / 120 XP</span></div>
+      <button class="snd" id="snd" type="button" aria-pressed="true">Звук</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- МЕНЮ -->
+  <section class="screen" id="scrMenu">
+    <div class="hero">
+      <div class="panel hero-main">
+        <span class="sec-h">Химическая игра-симулятор</span>
+        <h1>Химлаб <b>118</b></h1>
+        <p>Проходите миссии-головоломки, открывайте реальные реакции и собирайте коллекцию. Каждое уравнение уравнивается расчётом, а тепловой эффект считается по справочным данным.</p>
+        <div class="hero-cta"><button class="btn gold" id="ctaPlay" type="button">Играть кампанию</button><button class="btn ghost" data-go="free" type="button">Свободная лаборатория</button></div>
+        <canvas class="hero-art" id="heroArt" width="220" height="220" aria-hidden="true"></canvas>
+      </div>
+      <div class="panel rankcard">
+        <span class="sec-h">Ваш профиль</span>
+        <div class="rank-top"><div class="lvl" id="rkLvl">1</div><div><h2 id="rkName">Лаборант</h2><p id="rkNext">До следующего звания: 120 XP</p></div></div>
+        <div class="bigbar"><i id="rkBar" style="width:0%"></i></div>
+        <div class="kpis"><div class="kpi"><b id="kMis">0/29</b><span>миссий</span></div><div class="kpi"><b id="kStar">0</b><span>звёзд</span></div><div class="kpi"><b id="kCol">0</b><span>реакций</span></div></div>
+      </div>
+    </div>
+    <div class="panel daily" id="dailyMenu"></div>
+    <div class="modes">
+      <button class="mode" type="button" data-go="map"><span class="mi" style="background:var(--gold-soft);color:var(--gold)">29</span><h3>Кампания</h3><p>Пять глав миссий: от первой нейтрализации до чёрной змеи из сахара.</p><span class="mstat" id="mmMap"></span></button>
+      <button class="mode" type="button" data-go="free"><span class="mi" style="background:var(--accent-soft);color:var(--accent)">118</span><h3>Лаборатория</h3><p>Любые элементы и реактивы без ограничений, витрина красочных опытов.</p><span class="mstat">песочница</span></button>
+      <button class="mode" type="button" data-go="col"><span class="mi" style="background:color-mix(in srgb,var(--r2) 18%,var(--panel));color:var(--r2)">90</span><h3>Коллекция</h3><p>Карточки реакций от обычных до легендарных. Найдите все.</p><span class="mstat" id="mmCol"></span></button>
+      <button class="mode" type="button" data-go="ach"><span class="mi" style="background:color-mix(in srgb,var(--ok) 16%,var(--panel));color:var(--ok)">★</span><h3>Достижения</h3><p>Особые открытия, за которые дают бонусный опыт.</p><span class="mstat" id="mmAch"></span></button>
+    </div>
+    <footer class="note">
+      <p><b>Откуда берутся ответы.</b> «Проверенная реакция» взята из базы игры, с реальными наблюдениями и условиями. «Выведено по правилам» значит, что продукт получен из ряда электродных потенциалов, таблицы растворимости и степеней окисления. «Нет в базе» — игра честно не знает ответа и не выдумывает его. ΔH° рассчитан по закону Гесса из стандартных энтальпий образования при 25 °C.</p>
+      <p>Многие опыты опасны: в реальности их проводят только в оборудованной лаборатории.</p>
+    </footer>
+  </section>
+
+  <!-- КАРТА -->
+  <section class="screen" id="scrMap" hidden>
+    <div class="pagehead"><div><h1>Кампания</h1><p>Проходите миссии по порядку. Три звезды — за решение не больше чем с двух попыток и без подсказок.</p></div><span class="tag" id="mapStars">0 ★</span></div>
+    <div class="map" id="map"></div>
+  </section>
+
+  <!-- ЛАБОРАТОРИЯ -->
+  <section class="screen game" id="scrLab" hidden>
+    <div class="stage" id="stage">
+      <div class="canvas-wrap"><canvas id="lab" aria-label="Колба с реакцией"></canvas><div class="temp" id="temp" hidden></div></div>
+      <div class="hud hud-top"><div class="goalbar" id="goalBar" hidden></div><div class="rescard" id="resCard" hidden></div></div>
+      <aside class="hud hud-left" id="added" aria-label="Что в колбе"></aside>
+      <aside class="hud hud-right thermo" aria-label="Температура колбы">
+        <span class="th-h">t°</span>
+        <button class="tbtn" type="button" data-dt="50" aria-label="Нагреть на 50 градусов">+</button>
+        <div class="tube" id="tTube" role="slider" tabindex="0" aria-label="Температура колбы" aria-valuemin="-30" aria-valuemax="900" aria-valuenow="25"><i id="tMerc"></i></div>
+        <button class="tbtn" type="button" data-dt="-50" aria-label="Охладить на 50 градусов">−</button>
+        <div class="tread"><b id="tVal">25 °C</b><span id="tState">комнатная</span></div>
+        <div class="tpre"><button type="button" data-t="-20">лёд</button><button type="button" data-t="25">25°</button><button type="button" data-t="100">100°</button><button type="button" data-t="300">300°</button><button type="button" data-t="600">600°</button><button type="button" data-t="900">900°</button></div>
+        <div class="trate" id="tRate"></div>
+      </aside>
+      <div class="hud hud-act"><button class="btn gold go" id="go" type="button">Смешать</button><button class="btn ghost" id="clear" type="button">Очистить</button></div>
+    </div>
+    <div class="strip">
+      <div class="strip-h"><div class="stabs" id="stripTabs"></div><input id="stripSearch" type="search" placeholder="Поиск: натрий, Cu, кислота…" autocomplete="off" aria-label="Поиск вещества"></div>
+      <div class="strip-row" id="stripRow"></div>
+    </div>
+    <div class="below">
+      <section class="panel mcard" id="mPanel" hidden></section>
+      <section class="panel journal"><div class="bench-h"><span class="sec-h">Лабораторный журнал</span></div><div class="report" id="report"></div></section>
+    </div>
+  </section>
+
+  <!-- КОЛЛЕКЦИЯ -->
+  <section class="screen" id="scrCol" hidden>
+    <div class="pagehead"><div><h1>Коллекция реакций</h1><p id="colSub"></p></div>
+      <div class="filters" id="colFilter"><button type="button" data-f="all" aria-pressed="true">Все</button><button type="button" data-f="found" aria-pressed="false">Открытые</button><button type="button" data-f="locked" aria-pressed="false">Не найденные</button></div></div>
+    <div class="rarbar" id="rarbar"></div>
+    <div class="coll" id="coll"></div>
+    <p class="meta" id="ownDisc" style="margin-top:14px"></p>
+  </section>
+
+  <!-- ДОСТИЖЕНИЯ -->
+  <section class="screen" id="scrAch" hidden>
+    <div class="pagehead"><div><h1>Достижения</h1><p>За каждое особое открытие — бонус 50 XP.</p></div><span class="tag" id="achCount"></span></div>
+    <div class="ach" id="ach"></div>
+  </section>
+</div>
+
+
+
+<div class="modal" id="modal" hidden><div class="mbox" role="dialog" aria-modal="true" aria-labelledby="mTitle" id="mbox"></div></div>
+<canvas id="fx" aria-hidden="true"></canvas>
+<div class="pops" id="pops" aria-live="polite"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!--THREE-->
+<!--ENGINE-->
+<!--MISSIONS-->
+<!--UI-->
+</body>
+</html>
