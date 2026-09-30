@@ -7,7 +7,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const src = f => readFileSync(join(root, 'src', f), 'utf8');
 const dist = join(root, 'dist');
 
-const lab = `${src('lab3d.js')}\n${src('lab2d.js')}\nconst Lab = Lab3D || Lab2D;\n`;
+const lab = `${src('physics.js')}\n${src('lab3d.js')}\n${src('lab2d.js')}\nconst Lab = Lab3D || Lab2D;\n`;
 const ui = src('ui.js');
 if (!ui.includes('/*LAB*/')) throw new Error('src/ui.js: нет метки /*LAB*/');
 

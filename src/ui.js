@@ -72,14 +72,16 @@ function renderEvent(e, isNew) {
   if (e.preview && k === 'none') h += `<div class="eqlabel">${e.needHeat ? 'что произойдёт при нагреве' : 'гипотетическое уравнение'}</div><div class="eqbox preview">${eqHTML(e.preview, e.needHeat ? 't°' : '')}</div>${e.needHeat ? '' : dhHTML(e.preview.dH)}`;
   if (e.obs.length) h += `<ul class="obs">${e.obs.map(o => `<li>${esc(o)}</li>`).join('')}</ul>`;
   if (e.why) h += `<p class="why">${esc(e.why)}</p>`;
-  if (e.needT) h += `<p class="meta" style="color:var(--warn)">Нужна температура не ниже ${e.needT} °C, сейчас ${fmtT(state.T)}.</p>`;
-  if (e.tReq) h += `<p class="meta">Идёт при температуре от ${e.tReq} °C (в колбе ${fmtT(state.T)}).</p>`;
+  if (e.needT) h += `<p class="meta" style="color:var(--warn)">Для этого сценария нужен режим от ${e.needT} °C, сейчас ${fmtT(state.T)}.</p>`;
+  if (e.tReq) h += `<p class="meta">В учебном сценарии запускается от ${e.tReq} °C; режим опыта ${fmtT(state.T)}. Реальный порог зависит от условий.</p>`;
   if (e.danger) h += `<p class="danger">${esc(e.danger)}</p>`;
   return h + '</article>';
 }
 
 /* ---------- Навигация ---------- */
 function show(scr) {
+  if (scr !== 'lab') { state.runId++; state.busy = false; if (Lab.setPaused) Lab.setPaused(true); }
+  else if (Lab.setPaused) Lab.setPaused(state.paused || false);
   const map = { menu: 'scrMenu', map: 'scrMap', lab: 'scrLab', col: 'scrCol', ach: 'scrAch' };
   for (const k in map) $('#' + map[k]).hidden = k !== scr;
   document.querySelectorAll('.nav button').forEach(b => b.setAttribute('aria-current', (b.dataset.go === scr || (b.dataset.go === 'free' && scr === 'lab' && state.mode === 'free') || (b.dataset.go === 'map' && scr === 'lab' && state.mode === 'mission')) ? 'page' : 'false'));
@@ -152,7 +154,7 @@ const STATE_RU = { s: 'твёрдое', l: 'жидкость', g: 'газ' };
 const PH_RU = { aq: 'водный раствор', l: 'жидкость', s: 'твёрдое вещество', g: 'газ' };
 const STRIP_TABS = [['show', 'Витрина'], ['Кислоты', 'Кислоты'], ['Основания', 'Основания'], ['Соли в растворе', 'Соли'], ['Твёрдые вещества', 'Твёрдые'], ['Органика', 'Органика'], ['Растворители и газы', 'Вода и газы'], ['Прочее', 'Индикаторы'], ['el', 'Элементы']];
 const T_PRE = [[-20, 'лёд'], [25, 'комн.'], [100, '100°'], [300, '300°'], [600, '600°'], [900, '900°']];
-Object.assign(state, { runId: 0, T: 25, stripTab: store.get('strip', 'show'), q: '', ran: false, sig: '' });
+Object.assign(state, { runId: 0, T: 25, stripTab: store.get('strip', 'show'), q: '', ran: false, sig: '', busy: false, paused: false, lowQuality: store.get('lowQuality', false) });
 const clampN = (v, a, b) => Math.max(a, Math.min(b, v));
 const fmtT = T => (T < 0 ? '−' : '') + Math.abs(T) + ' °C';
 function tLabel(T) { return T <= -5 ? 'мороз' : T < 15 ? 'ледяная баня' : T < 40 ? 'комнатная' : T < 100 ? 'тёплая' : T < 150 ? 'кипящая баня' : T < 500 ? 'горелка' : 'сильное пламя'; }
@@ -169,9 +171,10 @@ function paintT() {
   $('#tVal').textContent = fmtT(T); $('#tState').textContent = tLabel(T);
   const m = $('#tMerc'); m.style.height = (8 + k * 92) + '%'; $('#tTube').style.setProperty('--k', k.toFixed(3));
   m.style.background = T < 15 ? 'linear-gradient(to top,#2a8cff,#8fd0ff)' : T < 150 ? 'linear-gradient(to top,#ff7a2a,#ffc44a)' : 'linear-gradient(to top,#ff3b1a,#ffb04a)';
-  $('#tTube').setAttribute('aria-valuenow', T); $('#tTube').setAttribute('aria-valuetext', fmtT(T));
-  $('#tRate').innerHTML = `скорость<br><b>×${fmtRate(rateAt(T))}</b>`;
-  $('#tRate').title = 'Правило Вант-Гоффа: при нагревании на каждые 10 °C скорость реакции растёт примерно вдвое';
+  $('#tTube').setAttribute('aria-valuenow', T); $('#tTube').setAttribute('aria-valuetext', fmtT(T) + (T >= 150 ? ', нагреватель' : ', режим опыта'));
+  $('#tRate').innerHTML = `анимация<br><b>×${animSpeed(T).toFixed(1).replace('.', ',')}</b>`;
+  $('#tRate').title = 'Темп визуализации ограничен для удобства. Для расчёта химической скорости нужны энергия активации, концентрации и закон скорости.';
+  $('#tState').textContent = T >= 150 ? 'нагреватель' : tLabel(T);
   document.querySelectorAll('[data-t]').forEach(b => b.setAttribute('aria-pressed', +b.dataset.t === T));
 }
 let liveT;
@@ -185,12 +188,14 @@ function liveUpdate() {
 }
 
 function openFree(ids, T) {
-  state.mode = 'free'; state.mission = null;
+  state.mode = 'free'; state.mission = null; state.runId++; state.ran = false; state.busy = false;
+  $('#labTitle').textContent = 'Свободная лаборатория';
   show('lab'); renderStrip(); renderGoal(); $('#mPanel').hidden = true;
   if (ids) loadCombo(ids, T); else { state.sel = []; setT(25); renderSel(); Lab.setScene([], false); clearReport(); }
 }
 function openMission(id) {
   const m = MISSIONS.find(x => x.id === id); if (!m || !unlocked(m)) return;
+  state.runId++; state.busy = false; $('#labTitle').textContent = `Миссия ${m.n} · ${m.t}`;
   state.mode = 'mission'; state.mission = m; state.attempts = 0; state.hints = 0; state.won = 0; state.sel = []; state.ran = false;
   show('lab'); setT(25); renderStrip(); renderSel(); Lab.setScene([], false); clearReport();
   renderGoal(); renderMissionPanel();
@@ -277,6 +282,17 @@ function renderAdded() {
   el.innerHTML = `<div class="add-h">В колбе <span>${core}/3</span></div>` + state.sel.map(id => { const S = getSub(id); return `<div class="add-it"><span class="ai-f">${fHTML(subName(id))}${id === 'h2so4c' ? '<small> конц.</small>' : ''}</span><div class="ai-t"><b>${esc(S.name)}</b><span>${esc(descOf(id))}</span></div><button type="button" data-rm="${id}" aria-label="Убрать ${esc(S.name)}">×</button></div>`; }).join('');
 }
 
+function renderSpecimen() {
+  const p = $('#specimenPanel'), id = state.sel[state.sel.length - 1];
+  if (!id) { p.innerHTML = '<span class="sec-h">Паспорт вещества</span><p class="meta">Выберите реагент — здесь появятся его свойства и поведение в колбе.</p>'; return; }
+  const S = getSub(id), m = LabPhysics.material(id);
+  p.innerHTML = `<div class="specimen-symbol">${fHTML(S.f)}</div><div class="specimen-info"><span class="sec-h">Паспорт вещества · при 25 °C</span><h2>${esc(S.name)}</h2><p>${esc(descOf(id))}</p><p class="specimen-behavior">${esc(m.note)}</p></div><div class="specimen-facts"><span>${esc(PH_RU[S.ph] || S.ph)}</span>${m.density ? `<span>ρ ≈ ${fmtN(m.density)} г/см³</span>` : ''}<span>${m.metal ? 'Металлический блеск' : m.soluble ? 'Растворимо в воде' : S.ind ? 'Индикатор' : 'Учебный образец'}</span></div>`;
+}
+function paintExperiment() {
+  const step = state.busy ? 2 : state.ran ? 3 : 1;
+  document.querySelectorAll('[data-step]').forEach(e => e.classList.toggle('active', +e.dataset.step === step));
+  $('#simStatus').textContent = state.busy ? 'Добавляем реагенты' : state.ran ? 'Наблюдай и изучай журнал' : state.sel.length ? `Выбрано: ${state.sel.length} · настрой температуру` : 'Готов к открытиям';
+}
 /* ---------- Колба: выбор ---------- */
 const isInd = x => x === 'php' || x === 'starch';
 function toggle(id) {
@@ -286,11 +302,11 @@ function toggle(id) {
     if (!isInd(id) && state.sel.filter(x => !isInd(x)).length >= 3) { toast('В колбе максимум три вещества (индикаторы не в счёт). Уберите одно.'); return; }
     state.sel.push(id);
   }
-  state.ran = false; state.runId++; $('#resCard').hidden = true;
+  state.ran = false; state.busy = false; state.runId++; clearReport();
   renderSel(); Lab.setScene(state.sel, state.T >= 150);
 }
-function renderSel() { renderAdded(); $('#go').disabled = !state.sel.length; paintSel(); }
-function paintSel() { document.querySelectorAll('.ing[data-id]').forEach(b => b.classList.toggle('sel', state.sel.includes(b.dataset.id))); }
+function renderSel() { renderAdded(); $('#go').disabled = !state.sel.length || state.busy; $('#go').textContent = state.busy ? 'Добавляем реагенты…' : state.ran ? 'Повторить опыт' : 'Смешать'; paintSel(); renderSpecimen(); paintExperiment(); }
+function paintSel() { document.querySelectorAll('.ing[data-id]').forEach(b => { const sel = state.sel.includes(b.dataset.id); b.classList.toggle('sel', sel); b.setAttribute('aria-pressed', sel); }); }
 function clearReport() { $('#report').innerHTML = '<div class="empty">Здесь появится подробный разбор каждой реакции.</div>'; $('#resCard').hidden = true; }
 function loadCombo(ids, T) {
   state.sel = ids.slice(); setT(T == null ? 25 : T); renderSel(); Lab.setScene(state.sel, state.T >= 150); run();
@@ -299,7 +315,8 @@ function comboT(ids, h) { const need = requiredT(ids); return need > 25 ? Math.m
 
 /* ---------- Главный ход ---------- */
 function run(opt = {}) {
-  if (!state.sel.length) return;
+  if (!state.sel.length || (state.busy && !opt.live)) return;
+  state.paused = false; $('#pauseSim').setAttribute('aria-pressed', false); $('#pauseSim').textContent = 'Ⅱ Пауза'; if (Lab.setPaused) Lab.setPaused(false);
   const token = ++state.runId;
   ac();
   const events = analyzeT(state.sel, state.T);
@@ -325,9 +342,13 @@ function run(opt = {}) {
   if (!dailyDone() && dcheck(events)) { G.daily = { date: todayKey(), id: dk }; setTimeout(() => { addXP(150, `Задание дня: ${dt}`); confetti(60); chime(true); if (state.mode === 'free') renderGoal(); }, delay); delay += 500; }
   save();
   $('#report').innerHTML = events.map(e => renderEvent(e, fresh.has(e))).join('');
-  const pourMs = Lab.react(events, { noPour: !!opt.live, speed: animSpeed(state.T) }) || 0;
-  setTimeout(() => { if (token !== state.runId) return; audio(events); showResult(events, fresh); }, pourMs);
-  if (state.mode === 'mission') missionCheck(events, pourMs);
+  const ready = () => {
+    if (token !== state.runId) return;
+    state.busy = false; renderSel(); audio(events); showResult(events, fresh);
+    if (state.mode === 'mission') missionCheck(events, 0);
+  };
+  const pourMs = Lab.react(events, { noPour: !!opt.live, speed: animSpeed(state.T), onReady: ready }) || 0;
+  state.busy = pourMs > 0; renderSel();
 }
 function showResult(events, fresh) {
   const e = events[0], c = $('#resCard'); if (!e) return;
@@ -336,16 +357,16 @@ function showResult(events, fresh) {
   if (main) h += `<div class="eqbox">${eqHTML(main.eq, e.cond && e.cond !== 'нагрев' ? e.cond : '')}</div>` + (main.eq.dH != null ? `<div class="rc-dh ${main.eq.dH < 0 ? 'exo' : 'endo'}">ΔH° = ${fmtDH(main.eq.dH)}</div>` : '');
   const line = e.obs[0] || e.why;
   if (line) h += `<p class="rc-p">${esc(line.length > 190 ? line.slice(0, 187) + '…' : line)}</p>`;
-  if (e.needT) h += `<p class="rc-p rc-need">Нужно не ниже ${e.needT} °C, сейчас ${fmtT(state.T)}. Поднимите температуру справа.</p>`;
+  if (e.needT) h += `<p class="rc-p rc-need">Нужно не ниже ${e.needT} °C, сейчас ${fmtT(state.T)}. Измените температурный режим.</p>`;
   const more = events.length > 1 ? ` · ещё ${events.length - 1}` : '';
   h += `<button type="button" class="rc-more" id="toJournal">Подробный разбор${more} ↓</button>`;
   c.innerHTML = h; c.hidden = false; placeResult();
 }
 const PORTRAIT = matchMedia('(max-width:760px), (orientation:portrait) and (max-width:1024px)');
-function placeResult() { const c = $('#resCard'), over = PORTRAIT.matches; c.classList.toggle('over', over); const host = over ? $('#stage .canvas-wrap') : $('.hud-top'); if (c.parentNode !== host) host.appendChild(c); }
+function placeResult() { const c = $('#resCard'), host = $('.hud-top'); c.classList.remove('over'); if (c.parentNode !== host) host.appendChild(c); }
 PORTRAIT.addEventListener ? PORTRAIT.addEventListener('change', placeResult) : PORTRAIT.addListener(placeResult);
 function missionCheck(events, pourMs) {
-  const m = state.mission; state.attempts++;
+  const m = state.mission, runToken = state.runId; state.attempts++;
   if (m.check(events)) {
     const stars = state.hints === 0 && state.attempts <= 2 ? 3 : (state.hints <= 1 && state.attempts <= 4 ? 2 : 1);
     const prev = G.missions[m.id] ? G.missions[m.id].stars : 0, first = !G.missions[m.id];
@@ -353,12 +374,12 @@ function missionCheck(events, pourMs) {
     if (stars > prev || first) G.missions[m.id] = { stars: Math.max(stars, prev), t: Date.now() };
     save(); state.won = stars;
     renderMissionPanel(); say('Отлично! Цель достигнута.', 'ok');
-    setTimeout(() => winModal(m, stars, gain, first), RM.matches ? 200 : pourMs + 2200);
+    setTimeout(() => { if (runToken === state.runId && state.mission === m && !$('#scrLab').hidden) winModal(m, stars, gain, first); }, RM.matches ? 200 : pourMs + 2200);
   } else {
     renderMissionPanel();
     const any = events.some(e => ['rx', 'phys', 'flame', 'ind'].includes(e.kind));
     const need = events.map(e => e.needT).filter(Boolean);
-    say(need.length ? `Не хватает энергии: нужно не ниже ${Math.min(...need)} °C. Поднимите температуру.` : events.some(e => e.type === 'Замерзание') ? 'Раствор замёрз — во льду реакции не идут. Нагрейте колбу.' : any ? 'Реакция прошла, но это не то, что нужно для цели. Попробуйте другую комбинацию.' : 'Здесь реакции нет. Подумайте, какие вещества должны встретиться.', 'no');
+    say(need.length ? `Не хватает энергии: нужно не ниже ${Math.min(...need)} °C. Поднимите температуру.` : events.some(e => e.type === 'Замерзание') ? 'Показана кристаллизация: перенос частиц замедлен. Нагрейте колбу.' : any ? 'Реакция прошла, но это не то, что нужно для цели. Попробуйте другую комбинацию.' : 'Здесь реакции нет. Подумайте, какие вещества должны встретиться.', 'no');
     if (state.attempts === 3 && state.hints === 0) setTimeout(() => toast('Застряли? Нажмите «Подсказка».'), 1200);
   }
 }
@@ -527,11 +548,18 @@ function bind() {
   $('#logo').onclick = () => show('menu');
   $('#ctaPlay').onclick = () => { const nm = nextMission(); if (nm) openMission(nm.id); else show('map'); };
   $('#go').addEventListener('click', () => run());
-  $('#clear').onclick = () => { state.sel = []; state.ran = false; state.runId++; renderSel(); Lab.setScene([], false); clearReport(); };
+  $('#clear').onclick = () => { state.sel = []; state.ran = false; state.busy = false; state.runId++; renderSel(); Lab.setScene([], false); clearReport(); };
   const snd = $('#snd'); const paint = () => { snd.setAttribute('aria-pressed', G.sound); snd.textContent = G.sound ? 'Звук: вкл' : 'Звук: выкл'; };
   snd.onclick = () => { G.sound = !G.sound; save(); paint(); }; paint();
   $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') $('#modal').hidden = true; });
   addEventListener('keydown', e => { if (e.key === 'Escape') $('#modal').hidden = true; });
+  $('#cameraReset').onclick = () => { if (Lab.resetCamera) Lab.resetCamera(); };
+  $('#cameraReset').hidden = !Lab.is3D;
+  $('#pauseSim').hidden = !Lab.setPaused;
+  $('#pauseSim').onclick = () => { if (state.busy) { toast('Пауза доступна после добавления реагентов.'); return; } state.paused = !state.paused; Lab.setPaused(state.paused); $('#pauseSim').setAttribute('aria-pressed', state.paused); $('#pauseSim').textContent = state.paused ? '▶ Продолжить' : 'Ⅱ Пауза'; };
+  const quality = $('#quality'); quality.hidden = !Lab.setQuality;
+  const paintQuality = () => { quality.setAttribute('aria-pressed', state.lowQuality); quality.textContent = state.lowQuality ? 'Графика: лёгкая' : 'Графика: высокая'; if (Lab.setQuality) Lab.setQuality(state.lowQuality); };
+  quality.onclick = () => { state.lowQuality = !state.lowQuality; store.set('lowQuality', state.lowQuality); paintQuality(); }; paintQuality();
   paintT(); renderAdded();
 }
 bind(); renderMe(); if (!hero3D($('#heroArt'))) heroArt(); show('menu');

@@ -2,7 +2,7 @@
 const Lab2D = Lab3D ? null : (() => {
   const cv = $('#lab'), ctx = cv.getContext('2d');
   let W = 0, H = 0, dpr = 1, tok = {}, tokT = 0;
-  let sc = null, parts = [], rxT = -1, fx = {}, heat = false;
+  let sc = null, parts = [], rxT = -1, fx = {}, heat = false, T = 25, paused = false, clock = 0, lastNow = 0, speed = 1;
   const rgb = h => h ? [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)) : null;
   const lerp = (a, b, t) => a + (b - a) * t;
   const mixRGB = (a, b, t) => a.map((v, i) => Math.round(lerp(v, b[i], t)));
@@ -49,18 +49,20 @@ const Lab2D = Lab3D ? null : (() => {
     subs.forEach((S, k) => {
       if (S.kind === 'el') {
         const e = S.el;
-        if (e.st === 's') solids.push({ col: ELCOLOR[e.sym] || (isMetal(e) ? '#a3abb4' : '#bdbdbd'), shape: isMetal(e) ? 'chunk' : 'powder', k });
-        if (e.st === 'l' && !wet) solids.push({ col: ELCOLOR[e.sym] || '#999', shape: 'drop', k });
-      } else if (S.ph === 's' && !(wet && S.dis)) solids.push({ col: RCOLOR[S.id] || '#eeeeee', shape: 'powder', k });
+        if (e.st === 's') solids.push({ id: S.id, col: ELCOLOR[e.sym] || (isMetal(e) ? '#a3abb4' : '#bdbdbd'), shape: isMetal(e) ? 'chunk' : 'powder', k });
+        if (e.st === 'l' && (!wet || e.sym === 'Hg')) solids.push({ id: S.id, col: ELCOLOR[e.sym] || '#999', shape: 'drop', k });
+      } else if (S.ph === 's') solids.push({ id: S.id, col: RCOLOR[S.id] || '#eeeeee', shape: 'powder', k });
     });
     const gases = subs.filter(S => S.ph === 'g').map(S => S.kind === 'el' ? GASCOLOR[S.f] : null).filter(Boolean);
     if (!wet && liqEl.some(S => S.el.sym === 'Br')) gases.push('#9c3a17');
     const base = rgb(mixColors(ionCols) || '#cfe3f2');
     const ph = subs.some(S => S.id === 'php') && subs.some(S => ['naoh', 'caoh2', 'nh3', 'na2co3'].includes(S.id)) && !subs.some(S => S.acid);
-    sc = { wet, level, col: ph ? rgb('#d6246e') : base, colA: mixColors(ionCols) || ph ? 0.72 : 0.28, to: null, toA: null, solids, gas: gases.length ? rgb(mixColors(gases)) : null, gasA: gases.length ? .3 : 0, ppt: null, pptAmt: 0, coat: null, coatT: 0, shrink: 1 };
+    sc = { wet, level, initialLevel: level, aqueous: aqueousMedium(ids), fp: freezePoint(ids), col: ph ? rgb('#d6246e') : base, colA: mixColors(ionCols) || ph ? 0.72 : 0.28, to: null, toA: null, solids, gas: gases.length ? rgb(mixColors(gases)) : null, gasA: gases.length ? .3 : 0, ppt: null, pptAmt: 0, coat: null, coatT: 0, shrink: 1 };
     $('#temp').hidden = true;
   }
-  function react(events) {
+  function react(events, opt = {}) {
+    speed = opt.speed || 1;
+    sc.solids.forEach(s => s.consumed = LabPhysics.consumed(s.id, events));
     fx = {};
     let sol;
     let seq = null;
@@ -83,8 +85,9 @@ const Lab2D = Lab3D ? null : (() => {
     if (rx && dHs.length) { const d = dHs[0]; t.hidden = false; t.textContent = d < 0 ? 'тепло выделяется' : d > 0 ? 'тепло поглощается' : 'ΔH ≈ 0'; t.style.color = `var(--${d < 0 ? 'exo' : d > 0 ? 'endo' : 'muted'})`; }
     else t.hidden = true;
     if (fx.frost) { t.hidden = false; t.textContent = 'колба холодеет'; t.style.color = 'var(--endo)'; }
-    rxT = performance.now(); parts = [];
+    rxT = clock; parts = [];
     if (RM.matches) { finish(); }
+    queueMicrotask(() => opt.onReady?.()); return 0;
   }
   function finish() {
     if (!sc) return;
@@ -95,23 +98,25 @@ const Lab2D = Lab3D ? null : (() => {
     if (fx.dissolve) sc.shrink = .45;
     if (sc.gasTo) { if (sc.gasTo === 'fade') sc.gasA = 0; else { sc.gas = sc.gasTo; sc.gasA = .35; } sc.gasTo = null; }
   }
-  function spawn(now, g, p) {
+  function spawn(now, g, p, dt) {
+    if (T <= sc.fp || fx.ice || paused || dt === 0) return;
+    const k = dt * 60;
     const lqY = sc.wet ? g.baseY - sc.level * (g.baseY - g.y1) : g.baseY - 6;
     const rnd = Math.random;
-    if (fx.bubbles && p < 5.5 && rnd() < (fx.foam ? 1 : .55)) {
+    if (fx.bubbles && p < 5.5 && rnd() < Math.min(1, .55 * k)) {
       for (let i = 0; i < (fx.foam ? 3 : 1); i++) {
         const y = g.baseY - 6 - rnd() * 10, hw = halfW(g, y) - 10;
         parts.push({ t: 'b', x: g.cx + (rnd() * 2 - 1) * hw * (fx.dissolve ? .4 : 1), y, r: 1.5 + rnd() * (fx.foam ? 4 : 2.5), vy: -(0.6 + rnd() * 1.2), top: lqY, life: 1 });
       }
     }
-    if (sc.ppt && p > .3 && p < 2.6 && rnd() < .8) {
+    if (sc.ppt && p > .3 && p < 2.6 && rnd() < .8 * k) {
       const y = lqY + 4 + rnd() * 20, hw = halfW(g, y) - 8;
       parts.push({ t: 'p', x: g.cx + (rnd() * 2 - 1) * hw, y, r: 1 + rnd() * 1.8, vy: .35 + rnd() * .5, life: 1 });
     }
-    if (fx.smoke && p < 4.5 && rnd() < .5) parts.push({ t: 's', x: g.cx + (rnd() - .5) * g.nw * .5, y: g.y1, r: 6 + rnd() * 8, vy: -(0.4 + rnd() * .6), vx: (rnd() - .5) * .4, life: 1, col: rgb(fx.smoke) });
-    if (fx.steam && p < 6 && rnd() < .35) parts.push({ t: 's', x: g.cx + (rnd() - .5) * g.nw * .4, y: g.y0, r: 5 + rnd() * 6, vy: -(0.5 + rnd() * .5), vx: (rnd() - .5) * .5, life: 1, col: [235, 240, 245] });
-    if (fx.sparks && p < 2.2) for (let i = 0; i < 3; i++) { const a = -Math.PI / 2 + (rnd() - .5) * 2.2, v = 2 + rnd() * 4; parts.push({ t: 'k', x: g.cx, y: g.baseY - 14, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1, col: rgb(fx.sparks) }); }
-    if (fx.gasTop && p < 4 && rnd() < .3) parts.push({ t: 's', x: g.cx + (rnd() - .5) * g.nw * .4, y: g.y0 + 4, r: 4 + rnd() * 5, vy: -(0.3 + rnd() * .4), vx: (rnd() - .5) * .3, life: 1, col: rgb(fx.gasTop) });
+    if (fx.smoke && p < 4.5 && rnd() < .5 * k) parts.push({ t: 's', x: g.cx + (rnd() - .5) * g.nw * .5, y: g.y1, r: 6 + rnd() * 8, vy: -(0.4 + rnd() * .6), vx: (rnd() - .5) * .4, life: 1, col: rgb(fx.smoke) });
+    if (fx.steam && p < 6 && rnd() < .35 * k) parts.push({ t: 's', x: g.cx + (rnd() - .5) * g.nw * .4, y: g.y0, r: 5 + rnd() * 6, vy: -(0.5 + rnd() * .5), vx: (rnd() - .5) * .5, life: 1, col: [235, 240, 245] });
+    if (fx.sparks && p < 2.2) for (let i = 0; i < Math.floor(3 * k + rnd()); i++) { const a = -Math.PI / 2 + (rnd() - .5) * 2.2, v = 2 + rnd() * 4; parts.push({ t: 'k', x: g.cx, y: g.baseY - 14, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1, col: rgb(fx.sparks) }); }
+    if (fx.gasTop && p < 4 && rnd() < .3 * k) parts.push({ t: 's', x: g.cx + (rnd() - .5) * g.nw * .4, y: g.y0 + 4, r: 4 + rnd() * 5, vy: -(0.3 + rnd() * .4), vx: (rnd() - .5) * .3, life: 1, col: rgb(fx.gasTop) });
   }
   function drawBurner(g, now) {
     const by = g.baseY + 10;
@@ -132,29 +137,35 @@ const Lab2D = Lab3D ? null : (() => {
   function hexish(c) { if (c.startsWith('#') && c.length === 7) return c; const d = document.createElement('div'); d.style.color = c; document.body.appendChild(d); const m = getComputedStyle(d).color.match(/\d+/g); d.remove(); return '#' + m.slice(0, 3).map(v => (+v).toString(16).padStart(2, '0')).join(''); }
   function frame(now) {
     requestAnimationFrame(frame);
+    let dt = Math.min(.25, (now - (lastNow || now)) / 1000); lastNow = now;
+    if (paused || document.hidden || RM.matches || $('#scrLab').hidden) dt = 0;
+    clock += dt * 1000; now = clock;
+    if ($('#scrLab').hidden) return;
     if (!W) resize(); if (!W || !sc) return;
     tokens(now);
-    const p = rxT < 0 ? -1 : (now - rxT) / 1000;
+    const p = rxT < 0 ? -1 : RM.matches ? 9 : (now - rxT) / 1000 * speed;
+    const frozen = sc.wet && (T <= sc.fp || fx.ice);
+    const step = dt * 60;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
     let shx = 0, shy = 0;
-    if (fx.boom && p >= 0 && p < .6 && !RM.matches) { const k = (1 - p / .6) * 6; shx = (Math.random() - .5) * k; shy = (Math.random() - .5) * k; }
+    if (fx.boom && p >= 0 && p < .6 && !RM.matches && !paused) { const k = (1 - p / .6) * 6; shx = (Math.random() - .5) * k; shy = (Math.random() - .5) * k; }
     ctx.translate(shx, shy);
     const g = geo();
     if (p >= 0 && !RM.matches) {
       const k = Math.min(1, Math.max(0, (p - .3) / 2.5));
-      if (sc.to) { sc.col = mixRGB(sc.col, sc.to, k * .06 + .01); sc.colA = lerp(sc.colA, sc.toA, .03); }
+      if (sc.to) { sc.col = mixRGB(sc.col, sc.to, LabPhysics.ease(1 + k * 3, dt)); sc.colA = lerp(sc.colA, sc.toA, LabPhysics.ease(2, dt)); }
       if (sc.seq) {
         const q = sc.seq; let i = 0; while (i < q.length - 1 && p >= q[i + 1][0]) i++;
         if (i >= q.length - 1) sc.col = q[q.length - 1][1];
         else { const [t0, c0] = q[i], [t1, c1] = q[i + 1]; const u = Math.max(0, Math.min(1, (p - t0) / Math.max(.3, (t1 - t0) * .6))); sc.col = mixRGB(c0, c1, u < 1 ? u : 1); }
-        sc.colA = lerp(sc.colA, .78, .05);
+        sc.colA = lerp(sc.colA, .78, LabPhysics.ease(3, dt));
       }
-      if (sc.ppt && p > .6) sc.pptAmt = Math.min(1, sc.pptAmt + .006);
-      if (sc.coat) sc.coatT = Math.min(1, sc.coatT + .006);
-      if (fx.dissolve) sc.shrink = Math.max(.45, sc.shrink - .0015);
-      if (sc.gasTo) { if (sc.gasTo === 'fade') sc.gasA = Math.max(0, sc.gasA - .004); else { sc.gas = sc.gas ? mixRGB(sc.gas, sc.gasTo, .03) : sc.gasTo; sc.gasA = Math.min(.35, sc.gasA + .004); } }
-      spawn(now, g, p);
+      if (sc.ppt && p > .6) sc.pptAmt = Math.min(1, sc.pptAmt + .36 * dt);
+      if (sc.coat) sc.coatT = Math.min(1, sc.coatT + .36 * dt);
+      if (fx.dissolve) sc.shrink = Math.max(.45, sc.shrink - .09 * dt);
+      if (sc.gasTo) { if (sc.gasTo === 'fade') sc.gasA = Math.max(0, sc.gasA - .24 * dt); else { sc.gas = sc.gas ? mixRGB(sc.gas, sc.gasTo, LabPhysics.ease(2, dt)) : sc.gasTo; sc.gasA = Math.min(.35, sc.gasA + .24 * dt); } }
+      spawn(now, g, p, dt);
     }
     drawBurner(g, now);
     const glass = rgb(hexish(tok.glass));
@@ -165,7 +176,7 @@ const Lab2D = Lab3D ? null : (() => {
     const lqY = g.baseY - sc.level * (g.baseY - g.y1);
     if (sc.wet) {
       const wob = p >= 0 && p < 1.5 && !RM.matches ? Math.sin(now / 90) * 3 * (1 - p / 1.5) : 0;
-      ctx.fillStyle = rgba(sc.col, sc.colA);
+      ctx.fillStyle = frozen ? '#c9e5f5' : rgba(sc.col, sc.colA);
       ctx.beginPath(); ctx.moveTo(0, lqY + wob); ctx.quadraticCurveTo(g.cx, lqY - wob, W, lqY + wob); ctx.lineTo(W, g.baseY + 2); ctx.lineTo(0, g.baseY + 2); ctx.fill();
       ctx.fillStyle = rgba(sc.col, Math.min(1, sc.colA + .2)); ctx.fillRect(0, lqY + wob - 1, W, 2);
     }
@@ -174,22 +185,25 @@ const Lab2D = Lab3D ? null : (() => {
     // твёрдые вещества
     sc.solids.forEach((s, i) => {
       const n = sc.solids.length, x = g.cx + (i - (n - 1) / 2) * Math.min(56, g.bw / (n + 1)), y = g.baseY - 4;
-      const k = s.shape === 'chunk' ? sc.shrink : 1;
+      const m = LabPhysics.material(s.id);
+      const dissolved = sc.wet && m.soluble && p >= 0 ? Math.exp(-p * .65) : 1;
+      const k = Math.min(dissolved, s.consumed && p >= 0 ? Math.max(.04, 1 - p / 6) : 1);
+      if (k <= .04) return;
       let c = rgb(s.col); if (sc.coat && sc.coatT > 0) c = mixRGB(c, sc.coat, sc.coatT * .85);
       ctx.fillStyle = rgba(c, 1);
-      let bx = x, by = y;
+      let bx = x, by = sc.wet && m.floats ? lqY : y;
       if (fx.darting && p >= 0 && p < 6 && sc.wet) { bx = g.cx + Math.sin(now / 260 + i) * (halfW(g, lqY) - 18); by = lqY + 2; }
       if (s.shape === 'chunk') { const w = 22 * k, h = 14 * k; ctx.beginPath(); ctx.moveTo(bx - w / 2, by); ctx.lineTo(bx - w / 2 + 3, by - h); ctx.lineTo(bx + w / 2 - 2, by - h + 2); ctx.lineTo(bx + w / 2, by); ctx.closePath(); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(bx - w / 2 + 4, by - h + 3, w * .4, 2); }
       else if (s.shape === 'drop') { ctx.beginPath(); ctx.ellipse(bx, by - 5, 12, 6, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.ellipse(bx - 4, by - 7, 3, 1.5, 0, 0, Math.PI * 2); ctx.fill(); }
-      else { ctx.beginPath(); ctx.ellipse(bx, by, 20, 8, 0, Math.PI, 0); ctx.fill(); }
+      else { ctx.beginPath(); ctx.ellipse(bx, by, 20 * k, 8 * k, 0, Math.PI, 0); ctx.fill(); }
     });
     // свечение
     if (fx.glow && p >= 0 && p < 5) { const a = Math.max(0, 1 - p / 5) * .7; const gr = ctx.createRadialGradient(g.cx, g.baseY - 8, 2, g.cx, g.baseY - 8, g.bw * .45); gr.addColorStop(0, rgba(rgb(fx.glow), a)); gr.addColorStop(1, rgba(rgb(fx.glow), 0)); ctx.fillStyle = gr; ctx.fillRect(0, g.y0, W, g.baseY - g.y0); }
     if (fx.frost && p >= 0) { const a = Math.min(.45, p / 3 * .45); ctx.strokeStyle = `rgba(190,230,255,${a})`; ctx.lineWidth = 6; flask(g); ctx.stroke(); }
     // частицы
     for (const q of parts) {
-      if (q.t === 'b') { q.y += q.vy; q.x += Math.sin(q.y / 7) * .3; if (q.y < q.top) q.life = 0; ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(q.x, q.y, q.r, 0, Math.PI * 2); ctx.stroke(); }
-      else if (q.t === 'p') { q.y += q.vy; if (q.y > g.baseY - 6) q.life = 0; ctx.fillStyle = rgba(sc.ppt, .9); ctx.fillRect(q.x, q.y, q.r, q.r); }
+      if (q.t === 'b') { q.y += q.vy * (frozen ? 0 : step); q.x += Math.sin(q.y / 7) * .3 * (frozen ? 0 : step); if (q.y < q.top) q.life = 0; ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(q.x, q.y, q.r, 0, Math.PI * 2); ctx.stroke(); }
+      else if (q.t === 'p') { q.y += q.vy * (frozen ? 0 : step); if (q.y > g.baseY - 6) q.life = 0; ctx.fillStyle = rgba(sc.ppt, .9); ctx.fillRect(q.x, q.y, q.r, q.r); }
     }
     // серебряное зеркало на стенках
     if (fx.mirror && p >= 0) {
@@ -222,8 +236,8 @@ const Lab2D = Lab3D ? null : (() => {
     ctx.fillStyle = rgba(glass, .8); ctx.fillRect(g.cx - g.nw / 2 - 4, g.y0 - 3, g.nw + 8, 4);
     // частицы вне колбы
     for (const q of parts) {
-      if (q.t === 's') { q.y += q.vy; q.x += q.vx; q.r += .12; q.life -= .006; ctx.fillStyle = rgba(q.col, Math.max(0, q.life) * .55); ctx.beginPath(); ctx.arc(q.x, q.y, q.r, 0, Math.PI * 2); ctx.fill(); if (q.y < -20) q.life = 0; }
-      else if (q.t === 'k') { q.x += q.vx; q.y += q.vy; q.vy += .12; q.life -= .02; ctx.strokeStyle = rgba(q.col, Math.max(0, q.life)); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(q.x - q.vx * 2, q.y - q.vy * 2); ctx.stroke(); }
+      if (q.t === 's') { q.y += q.vy * step; q.x += q.vx * step; q.r += .12 * step; q.life -= .006 * step; ctx.fillStyle = rgba(q.col, Math.max(0, q.life) * .55); ctx.beginPath(); ctx.arc(q.x, q.y, q.r, 0, Math.PI * 2); ctx.fill(); if (q.y < -20) q.life = 0; }
+      else if (q.t === 'k') { q.x += q.vx * step; q.y += q.vy * step; q.vy += .12 * step; q.life -= .02 * step; ctx.strokeStyle = rgba(q.col, Math.max(0, q.life)); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(q.x - q.vx * 2, q.y - q.vy * 2); ctx.stroke(); }
     }
     parts = parts.filter(q => q.life > 0).slice(-420);
     // чёрная змея
@@ -263,6 +277,6 @@ const Lab2D = Lab3D ? null : (() => {
   }
   addEventListener('resize', () => { resize(); });
   requestAnimationFrame(frame);
-  return { setScene, react, resize, setHeat(v) { heat = v; } };
+  return { setScene, react, resize, setTemp(v) { T = v; heat = v >= 150; }, setHeat(v) { heat = v; }, setPaused(v) { paused = v; } };
 })();
 

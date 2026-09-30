@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Химлаб 118 — химическая 3D-игра: кампания из 29 миссий, коллекция из 90 реальных реакций, 118 элементов и управление температурой.">
-<meta name="theme-color" content="#15202b">
+<meta name="theme-color" content="#091522">
 <title>Химлаб 118</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -36,9 +36,9 @@
   <section class="screen" id="scrMenu">
     <div class="hero">
       <div class="panel hero-main">
-        <span class="sec-h">Химическая игра-симулятор</span>
-        <h1>Химлаб <b>118</b></h1>
-        <p>Проходите миссии-головоломки, открывайте реальные реакции и собирайте коллекцию. Каждое уравнение уравнивается расчётом, а тепловой эффект считается по справочным данным.</p>
+        <span class="sec-h">Открывай · экспериментируй · объясняй</span>
+        <h1>Твоя лаборатория<br><b>больших открытий.</b></h1>
+        <p>От белого осадка до холодного света. Собирайте реагенты, наблюдайте превращения и разбирайтесь, почему они происходят. 29 миссий, 118 элементов и научный журнал каждого опыта.</p>
         <div class="hero-cta"><button class="btn gold" id="ctaPlay" type="button">Играть кампанию</button><button class="btn ghost" data-go="free" type="button">Свободная лаборатория</button></div>
         <canvas class="hero-art" id="heroArt" width="220" height="220" aria-hidden="true"></canvas>
       </div>
@@ -70,14 +70,16 @@
 
   <!-- ЛАБОРАТОРИЯ -->
   <section class="screen game" id="scrLab" hidden>
+    <div class="lab-heading"><div><span class="sec-h">Химлаб / исследовательский стол</span><h1 id="labTitle">Свободная лаборатория</h1></div><div class="lab-tools"><button type="button" id="cameraReset" class="tool" aria-label="Вернуть камеру к колбе">◎ Камера</button><button type="button" id="pauseSim" class="tool" aria-pressed="false">Ⅱ Пауза</button><button type="button" id="quality" class="tool" aria-pressed="false">Графика: высокая</button></div></div>
+    <div class="experiment-steps" aria-label="Этапы опыта"><span data-step="1" class="active"><b>01</b> Выбери реагенты</span><span data-step="2"><b>02</b> Проведи опыт</span><span data-step="3"><b>03</b> Объясни результат</span><em id="simStatus" role="status" aria-live="polite">Готов к открытиям</em></div>
     <div class="stage" id="stage">
       <div class="canvas-wrap"><canvas id="lab" aria-label="Колба с реакцией"></canvas><div class="temp" id="temp" hidden></div></div>
       <div class="hud hud-top"><div class="goalbar" id="goalBar" hidden></div><div class="rescard" id="resCard" hidden></div></div>
       <aside class="hud hud-left" id="added" aria-label="Что в колбе"></aside>
-      <aside class="hud hud-right thermo" aria-label="Температура колбы">
-        <span class="th-h">t°</span>
+      <aside class="hud hud-right thermo" aria-label="Температурный режим опыта">
+        <span class="th-h">Режим t°</span>
         <button class="tbtn" type="button" data-dt="50" aria-label="Нагреть на 50 градусов">+</button>
-        <div class="tube" id="tTube" role="slider" tabindex="0" aria-label="Температура колбы" aria-valuemin="-30" aria-valuemax="900" aria-valuenow="25"><i id="tMerc"></i></div>
+        <div class="tube" id="tTube" role="slider" tabindex="0" aria-label="Температурный режим опыта" aria-valuemin="-30" aria-valuemax="900" aria-valuenow="25"><i id="tMerc"></i></div>
         <button class="tbtn" type="button" data-dt="-50" aria-label="Охладить на 50 градусов">−</button>
         <div class="tread"><b id="tVal">25 °C</b><span id="tState">комнатная</span></div>
         <div class="tpre"><button type="button" data-t="-20">лёд</button><button type="button" data-t="25">25°</button><button type="button" data-t="100">100°</button><button type="button" data-t="300">300°</button><button type="button" data-t="600">600°</button><button type="button" data-t="900">900°</button></div>
@@ -86,9 +88,16 @@
       <div class="hud hud-act"><button class="btn gold go" id="go" type="button">Смешать</button><button class="btn ghost" id="clear" type="button">Очистить</button></div>
     </div>
     <div class="strip">
-      <div class="strip-h"><div class="stabs" id="stripTabs"></div><input id="stripSearch" type="search" placeholder="Поиск: натрий, Cu, кислота…" autocomplete="off" aria-label="Поиск вещества"></div>
+      <div class="shelf-label"><span class="sec-h">Полка реагентов</span><span>Нажми на карточку, чтобы добавить</span></div><div class="strip-h"><div class="stabs" id="stripTabs"></div><input id="stripSearch" type="search" placeholder="Поиск: натрий, Cu, кислота…" autocomplete="off" aria-label="Поиск вещества"></div>
       <div class="strip-row" id="stripRow"></div>
     </div>
+    <div class="specimen-panel panel" id="specimenPanel"><span class="sec-h">Паспорт вещества</span><p class="meta">Выберите реагент — здесь появятся его свойства и поведение в колбе.</p></div>
+    <details class="model-notes panel"><summary>Научная модель и границы точности <span>Условия · источники · приближения</span></summary><div>
+      <p>Уравнения проверяются по атомам и заряду. ΔH° относится к уравнению с указанными коэффициентами и стандартным состояниям при 25 °C; это не расчёт изменения температуры колбы.</p>
+      <p>Количество, концентрация, давление и порядок добавления не задаются. Для трёх веществ показываются известные парные реакции или отдельный сценарий, а не полный состав равновесной смеси. Цвет, длительность и размер частиц иллюстративны; численный pH не рассчитывается.</p>
+      <p>Высокая температура означает режим нагревателя или пламени. Открытый водный раствор не остаётся жидким при 900 °C. Замерзание растворов при −7 °C — условный сценарий. Температурные пороги зависят от условий; скорость анимации не является измеренной скоростью реакции.</p>
+      <div class="source-links"><a href="https://openstax.org/books/chemistry-2e/pages/11-4-colligative-properties" target="_blank" rel="noopener noreferrer">OpenStax: фазовые переходы ↗</a><a href="https://periodic-table.rsc.org/" target="_blank" rel="noopener noreferrer">RSC: свойства элементов ↗</a><a href="https://openstax.org/books/chemistry-2e/pages/12-5-collision-theory" target="_blank" rel="noopener noreferrer">OpenStax: кинетика ↗</a><a href="https://www.chem.indiana.edu/faculty-research/faculty-resources/chemistry-demos/demo/catalysis-of-the-decomposition-of-h2o2/" target="_blank" rel="noopener noreferrer">Indiana University: катализ ↗</a></div>
+    </div></details>
     <div class="below">
       <section class="panel mcard" id="mPanel" hidden></section>
       <section class="panel journal"><div class="bench-h"><span class="sec-h">Лабораторный журнал</span></div><div class="report" id="report"></div></section>
