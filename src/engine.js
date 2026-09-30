@@ -431,7 +431,7 @@ const REAGENTS = [
   { id: 'hno3', name: 'Азотная кислота', f: 'HNO3', ph: 'aq', note: 'разбавленная', ions: [['H^+', 1], ['NO3^-', 1]], acid: 's', g: 'Кислоты' },
   { id: 'ch3cooh', name: 'Уксусная кислота', f: 'CH3COOH', ph: 'aq', note: 'столовый уксус', mol: 'CH3COOH', acid: 'w', g: 'Кислоты' },
   { id: 'naoh', name: 'Гидроксид натрия', f: 'NaOH', ph: 'aq', note: 'раствор щёлочи', ions: [['Na^+', 1], ['OH^-', 1]], base: 's', g: 'Основания' },
-  { id: 'caoh2', name: 'Известковая вода', f: 'Ca(OH)2', ph: 'aq', note: 'насыщенный раствор', ions: [['Ca^2+', 1], ['OH^-', 2]], base: 's', g: 'Основания' },
+  { id: 'caoh2', stock: .02, maxC: .02, name: 'Известковая вода', f: 'Ca(OH)2', ph: 'aq', note: 'насыщенный раствор', ions: [['Ca^2+', 1], ['OH^-', 2]], base: 's', g: 'Основания' },
   { id: 'nh3', name: 'Нашатырный спирт', f: 'NH3', ph: 'aq', note: 'водный аммиак', mol: 'NH3', base: 'w', g: 'Основания' },
   { id: 'nacl', name: 'Хлорид натрия', f: 'NaCl', ph: 'aq', note: 'поваренная соль', ions: [['Na^+', 1], ['Cl^-', 1]], g: 'Соли в растворе' },
   { id: 'ki', name: 'Иодид калия', f: 'KI', ph: 'aq', ions: [['K^+', 1], ['I^-', 1]], g: 'Соли в растворе' },
@@ -462,8 +462,30 @@ const REAGENTS = [
   { id: 'sucrose', name: 'Сахар', f: 'C12H22O11', ph: 's', note: 'сахароза', dis: true, org: true, g: 'Органика' },
   { id: 'luminol', name: 'Люминол', f: 'C8H7N3O2', ph: 'aq', note: 'в щелочном растворе', mol: 'C8H7N3O2', org: true, g: 'Органика' },
   { id: 'starch', name: 'Крахмал', f: '(C6H10O5)n', ph: 'aq', note: 'индикатор на иод', ind: true, g: 'Прочее' },
-  { id: 'h2o2', name: 'Перекись водорода', f: 'H2O2', ph: 'aq', note: '3 %', mol: 'H2O2', g: 'Прочее' },
-  { id: 'php', name: 'Фенолфталеин', f: 'C20H14O4', ph: 'aq', note: 'индикатор', ind: true, g: 'Прочее' }
+  { id: 'h2o2', name: 'Перекись водорода', f: 'H2O2', ph: 'aq', note: 'исходный раствор ≈ 3 % м/об; концентрацию можно задать', mol: 'H2O2', g: 'Прочее' },
+  { id: 'php', stock: .001, maxC: .001, name: 'Фенолфталеин', f: 'C20H14O4', ph: 'aq', note: 'индикатор', ind: true, g: 'Прочее' },
+  { id: 'indigo', name: 'Индигокармин', f: 'C16H8N2Na2O8S2', ph: 'aq', stock: .001, maxC: .01, color: '#2434aa', redox: 'indigo', note: 'индиготиндисульфонат натрия; редокс-краситель', g: 'Красители' },
+  { id: 'methylene', name: 'Метиленовый синий', f: 'C16H18ClN3S', ph: 'aq', stock: .001, maxC: .01, color: '#1551bc', redox: 'methylene', note: 'безводная формула; редокс-краситель', g: 'Красители' },
+  { id: 'methylorange', name: 'Метилоранж', f: 'C14H14N3NaO3S', ph: 'aq', stock: .001, maxC: .005, ind: true, color: '#e8a128', range: [3.1,4.4], colors: ['#db3344','#f1c52b'], note: 'переход pH 3,1–4,4', g: 'Красители' },
+  { id: 'btb', name: 'Бромтимоловый синий', f: 'C27H28Br2O5S', ph: 'aq', stock: .0001, maxC: .001, ind: true, color: '#55ad78', range: [6,7.6], colors: ['#e8c831','#2467c7'], note: 'переход pH 6,0–7,6; водная индикаторная форма', g: 'Красители' },
+  { id: 'phenolred', name: 'Феноловый красный', f: 'C19H14O5S', ph: 'aq', stock: .0001, maxC: .001, ind: true, color: '#e7a736', range: [6.8,8.2], colors: ['#f1cd33','#d42c65'], note: 'переход pH 6,8–8,2', g: 'Красители' },
+  { id: 'bromocresol', name: 'Бромкрезоловый зелёный', f: 'C21H14Br4O5S', ph: 'aq', stock: .0001, maxC: .001, ind: true, color: '#267bbb', range: [3.8,5.4], colors: ['#edc937','#2870b8'], note: 'переход pH 3,8–5,4', g: 'Красители' },
+  { id: 'koh', name: 'Гидроксид калия', f: 'KOH', ph: 'aq', ions: [['K^+',1],['OH^-',1]], base: 's', g: 'Основания' },
+  { id: 'cacl2', name: 'Хлорид кальция', f: 'CaCl2', ph: 'aq', ions: [['Ca^2+',1],['Cl^-',2]], g: 'Соли в растворе' },
+  { id: 'mgcl2', name: 'Хлорид магния', f: 'MgCl2', ph: 'aq', ions: [['Mg^2+',1],['Cl^-',2]], g: 'Соли в растворе' },
+  { id: 'znso4', name: 'Сульфат цинка', f: 'ZnSO4', ph: 'aq', ions: [['Zn^2+',1],['SO4^2-',1]], g: 'Соли в растворе' },
+  { id: 'alcl3', name: 'Хлорид алюминия', f: 'AlCl3', ph: 'aq', ions: [['Al^3+',1],['Cl^-',3]], g: 'Соли в растворе' },
+  { id: 'na2so4', name: 'Сульфат натрия', f: 'Na2SO4', ph: 'aq', ions: [['Na^+',2],['SO4^2-',1]], g: 'Соли в растворе' },
+  { id: 'na2s2o3', specialChemistry: true, name: 'Тиосульфат натрия', f: 'Na2S2O3', ph: 'aq', stock: .1, note: 'концентрация по безводной соли', g: 'Соли в растворе' },
+  { id: 'k3fecn6', specialChemistry: true, name: 'Красная кровяная соль', f: 'K3[Fe(CN)6]', ph: 'aq', color: '#d9a342', note: 'гексацианоферрат(III) калия; специальные реакции требуют отдельной модели', g: 'Соли в растворе' },
+  { id: 'kmno4aq', name: 'Раствор перманганата калия', f: 'KMnO4', ph: 'aq', stock: .01, maxC: .2, ions: [['K^+',1],['MnO4^-',1]], note: 'водный раствор', g: 'Соли в растворе' },
+  { id: 'nahco3aq', name: 'Раствор пищевой соды', f: 'NaHCO3', ph: 'aq', maxC: 1, ions: [['Na^+',1],['HCO3^-',1]], basicInd: true, g: 'Соли в растворе' },
+  { id: 'acetate', name: 'Ацетат натрия', f: 'CH3COONa', ph: 'aq', ions: [['Na^+',1],['CH3COO^-',1]], basicInd: true, g: 'Соли в растворе' },
+  { id: 'nh4claq', name: 'Раствор хлорида аммония', f: 'NH4Cl', ph: 'aq', ions: [['NH4^+',1],['Cl^-',1]], g: 'Соли в растворе' },
+  { id: 'fecl2', name: 'Хлорид железа(II)', f: 'FeCl2', ph: 'aq', ions: [['Fe^2+',1],['Cl^-',2]], g: 'Соли в растворе' },
+  { id: 'oxalic', specialChemistry: true, name: 'Щавелевая кислота', f: 'H2C2O4', ph: 'aq', mol: 'H2C2O4', acid: 'w', stock: .05, maxC: .5, g: 'Кислоты' },
+  { id: 'ascorbic', specialChemistry: true, name: 'Аскорбиновая кислота', f: 'C6H8O6', ph: 'aq', mol: 'C6H8O6', org: true, acid: 'w', stock: .05, maxC: .5, g: 'Органика' }
+
 ];
 const RG = {}; REAGENTS.forEach(r => RG[r.id] = r);
 const RCOLOR = { sucrose: '#fbfbf7', h2o2: null, fe2o3: '#9b3d1f', cuo: '#1d1b1a', mno2: '#2b2522', caco3: '#f3f1ea', nahco3: '#fafafa', nh4cl: '#f7f7f7', kmno4: '#4d0f63' };
@@ -489,6 +511,20 @@ const term = (f, s) => `${f}(${s})`;
 const CUR = {};
 const key = ids => ids.slice().sort().join('+');
 function cur(ids, spec) { CUR[key(ids.split(' '))] = spec; }
+
+
+// Sources: Purdue demonstrations 19.1 / 19.2. These are qualitative dye cycles,
+// not a fabricated single net equation or calibrated rate law.
+for (const [id, type, seq] of [
+  ['indigo', 'Химический светофор', [[0,'#39a75e'],[3,'#d74646'],[7,'#e7c82d']]],
+  ['methylene', 'Синяя бутылка', [[0,'#1551bc'],[6,'#bcd6ea']]]
+]) cur(`${id} glucose naoh`, { type, redox: id,
+  cond: 'щелочной раствор глюкозы; кислород воздуха',
+  obs: [id === 'indigo' ? 'После смешивания зелёный раствор переходит через красный в жёлтый; встряхивание возвращает зелёный цвет' : 'Синий раствор обесцвечивается в покое; встряхивание возвращает синюю окраску'],
+  why: 'Глюкоза в щелочной среде восстанавливает краситель. При встряхивании кислород воздуха растворяется и окисляет его. Цвета и время переходов показаны качественно; запас кислорода, расход глюкозы и число циклов не рассчитаны. Для воспроизводимого сценария задайте суммарную концентрацию NaOH не ниже 0,01 моль/л и режим 25 °C.',
+  fx: { solSeq: seq }, tags: ['colorseq'] });
+cur('na2s2o3 hcl', { eq: 'Na2S2O3(aq) + 2HCl(aq) -> 2NaCl(aq) + S(s) + SO2(g) + H2O(l)', type: 'Разложение тиосульфата',
+  obs: ['Раствор мутнеет из-за коллоидной серы; выделяется SO₂'], why: 'Тиосерная кислота неустойчива и разлагается. Скорость помутнения зависит от концентрации и температуры.', fx: {ppt: '#f2dfa1', bubbles:true}, tags:['ppt'] });
 
 // неметалл + неметалл
 cur('H O', { eq: '2H2(g) + O2(g) -> 2H2O(l)', h: true, type: 'Соединение · горение', cond: 'искра или пламя',
@@ -1257,12 +1293,14 @@ function fromSpec(sp, heat) {
   const eqs = sp.eq ? [].concat(sp.eq).map(s => mk(s, sp.over)) : [];
   if (sp.h === true && !heat) return NEEDHEAT(sp.cold || 'При комнатной температуре реакция не начинается: не хватает энергии активации. Включите горелку.', eqs[0]);
   if (sp.phys) return PHYS(sp.type, sp.why, { obs: sp.obs || [], danger: sp.danger || '' });
-  return ev({ type: sp.type, source: 'curated', subs: eqs.map(eq => ({ eq })), mol: sp.mol ? mk(sp.mol) : null, obs: sp.obs || [], why: sp.why || '', cond: sp.cond || '', danger: sp.danger || '', fx: Object.assign({}, sp.fx || {}), tags: (sp.tags || []).slice(), ionic: !!sp.mol });
+  return ev({ type: sp.type, source: 'curated', subs: eqs.map(eq => ({ eq })), mol: sp.mol ? mk(sp.mol) : null, obs: sp.obs || [], why: sp.why || '', cond: sp.cond || '', danger: sp.danger || '', fx: Object.assign({}, sp.fx || {}), tags: (sp.tags || []).slice(), ionic: !!sp.mol, redox: sp.redox || null });
 }
 
 function pair(a, b, heat, wetCtx) {
+  if (getSub(a)?.redox || getSub(b)?.redox) return PHYS('Раствор красителя', 'Окраска красителя сама по себе не означает реакцию. Для редокс-цикла добавьте глюкозу и NaOH; другие превращения здесь не описаны.');
   const c = CUR[key([a, b])];
   if (c) { const r = fromSpec(c, heat); if (r.kind !== 'none' && r.kind !== 'unknown') r.curKey = key([a, b]); return r; }
+  if (a !== 'h2o' && b !== 'h2o' && (getSub(a)?.specialChemistry || getSub(b)?.specialChemistry)) return UNK('Для этой пары нужна отдельная модель комплексообразования или ОВР; общие правила здесь не применяются.');
   if (a === 'h2so4c' || b === 'h2so4c') return concH2SO4(getSub(a === 'h2so4c' ? b : a), heat);
   const wetten = S => (wetCtx && S.dis ? Object.assign({}, S, { ph: 'aq' }) : S);
   const A = wetten(getSub(a)), B = wetten(getSub(b));
@@ -1297,7 +1335,7 @@ function starchEv(core, events) {
 }
 
 function analyze(ids, heat) {
-  const core = ids.filter(i => i !== 'php' && i !== 'starch');
+  const core = ids.filter(i => !getSub(i)?.ind);
   const events = [];
   const covered = new Set();
   if (core.length === 3 && CUR[key(core)]) {
@@ -1375,7 +1413,7 @@ function freezePoint(core) {
   return core.every(i => { const S = getSub(i); return i === 'h2o' || (S && !wetSub(S) && !S.dis); }) ? 0 : -7;
 }
 function analyzeT(ids, T) {
-  const core = ids.filter(i => i !== 'php' && i !== 'starch');
+  const core = ids.filter(i => !getSub(i)?.ind);
   const wet = aqueousMedium(ids);
   const fp = freezePoint(ids);
   if (wet && T <= fp) {
@@ -1425,4 +1463,4 @@ function requiredT(ids) {
   return t;
 }
 
-if (typeof module !== 'undefined') module.exports = { analyzeT, requiredT, rateAt, freezePoint, aqueousMedium, catalog, analyze, mk, BAD_EQ, CUR, ELS, REAGENTS, getSub, eqText, hf, key };
+if (typeof module !== 'undefined') module.exports = { analyzeT, requiredT, rateAt, freezePoint, aqueousMedium, catalog, analyze, mk, BAD_EQ, CUR, ELS, REAGENTS, getSub, parseF, eqText, hf, key };

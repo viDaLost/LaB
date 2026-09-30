@@ -152,9 +152,9 @@ const starsHTML = n => [0, 1, 2].map(i => i < n ? '<b>★</b>' : '★').join('')
 /* ---------- Лаборатория: игровой экран ---------- */
 const STATE_RU = { s: 'твёрдое', l: 'жидкость', g: 'газ' };
 const PH_RU = { aq: 'водный раствор', l: 'жидкость', s: 'твёрдое вещество', g: 'газ' };
-const STRIP_TABS = [['show', 'Витрина'], ['Кислоты', 'Кислоты'], ['Основания', 'Основания'], ['Соли в растворе', 'Соли'], ['Твёрдые вещества', 'Твёрдые'], ['Органика', 'Органика'], ['Растворители и газы', 'Вода и газы'], ['Прочее', 'Индикаторы'], ['el', 'Элементы']];
+const STRIP_TABS = [['show', 'Витрина'], ['Кислоты', 'Кислоты'], ['Основания', 'Основания'], ['Соли в растворе', 'Соли'], ['Твёрдые вещества', 'Твёрдые'], ['Органика', 'Органика'], ['Растворители и газы', 'Вода и газы'], ['Красители', 'Красители'], ['Прочее', 'Индикаторы'], ['el', 'Элементы']];
 const T_PRE = [[-20, 'лёд'], [25, 'комн.'], [100, '100°'], [300, '300°'], [600, '600°'], [900, '900°']];
-Object.assign(state, { runId: 0, T: 25, stripTab: store.get('strip', 'show'), q: '', ran: false, sig: '', busy: false, paused: false, lowQuality: store.get('lowQuality', false) });
+Object.assign(state, { doses: {}, doseId: null, doseKind: 'mass', quantitative: null, runId: 0, T: 25, stripTab: store.get('strip', 'show'), q: '', ran: false, sig: '', busy: false, paused: false, lowQuality: store.get('lowQuality', false) });
 const clampN = (v, a, b) => Math.max(a, Math.min(b, v));
 const fmtT = T => (T < 0 ? '−' : '') + Math.abs(T) + ' °C';
 function tLabel(T) { return T <= -5 ? 'мороз' : T < 15 ? 'ледяная баня' : T < 40 ? 'комнатная' : T < 100 ? 'тёплая' : T < 150 ? 'кипящая баня' : T < 500 ? 'горелка' : 'сильное пламя'; }
@@ -191,12 +191,12 @@ function openFree(ids, T) {
   state.mode = 'free'; state.mission = null; state.runId++; state.ran = false; state.busy = false;
   $('#labTitle').textContent = 'Свободная лаборатория';
   show('lab'); renderStrip(); renderGoal(); $('#mPanel').hidden = true;
-  if (ids) loadCombo(ids, T); else { state.sel = []; setT(25); renderSel(); Lab.setScene([], false); clearReport(); }
+  if (ids) loadCombo(ids, T); else { state.sel = []; state.doses = {}; state.doseId = null; setT(25); renderSel(); Lab.setScene([], false); clearReport(); }
 }
 function openMission(id) {
   const m = MISSIONS.find(x => x.id === id); if (!m || !unlocked(m)) return;
   state.runId++; state.busy = false; $('#labTitle').textContent = `Миссия ${m.n} · ${m.t}`;
-  state.mode = 'mission'; state.mission = m; state.attempts = 0; state.hints = 0; state.won = 0; state.sel = []; state.ran = false;
+  state.mode = 'mission'; state.mission = m; state.attempts = 0; state.hints = 0; state.won = 0; state.sel = []; state.doses = {}; state.doseId = null; state.ran = false;
   show('lab'); setT(25); renderStrip(); renderSel(); Lab.setScene([], false); clearReport();
   renderGoal(); renderMissionPanel();
 }
@@ -251,7 +251,7 @@ function showCardHTML(x, i) {
 function matchQ(x) {
   const q = state.q; if (!q) return true;
   if (x.sym) return x.sym.toLowerCase() === q || x.name.toLowerCase().includes(q) || String(x.z) === q || (q.length > 1 && x.sym.toLowerCase().startsWith(q));
-  return (x.name + ' ' + x.f + ' ' + (x.note || '')).toLowerCase().includes(q);
+  return (x.id + ' ' + x.name + ' ' + x.f + ' ' + (x.note || '')).toLowerCase().includes(q);
 }
 function renderStrip() {
   const bar = $('#stripTabs'), row = $('#stripRow'), srch = $('#stripSearch');
@@ -279,7 +279,7 @@ function descOf(id) {
 function renderAdded() {
   const el = $('#added'), core = state.sel.filter(x => !isInd(x)).length;
   if (!state.sel.length) { el.innerHTML = `<div class="add-h">В колбе <span>0/3</span></div><p class="add-empty">Колба пуста. Выберите вещества на ленте внизу — до трёх, индикаторы не в счёт.</p>`; return; }
-  el.innerHTML = `<div class="add-h">В колбе <span>${core}/3</span></div>` + state.sel.map(id => { const S = getSub(id); return `<div class="add-it"><span class="ai-f">${fHTML(subName(id))}${id === 'h2so4c' ? '<small> конц.</small>' : ''}</span><div class="ai-t"><b>${esc(S.name)}</b><span>${esc(descOf(id))}</span></div><button type="button" data-rm="${id}" aria-label="Убрать ${esc(S.name)}">×</button></div>`; }).join('');
+  el.innerHTML = `<div class="add-h">В колбе <span>${core}/3</span></div>` + state.sel.map(id => { const S = getSub(id); return `<div class="add-it"><span class="ai-f">${fHTML(subName(id))}${id === 'h2so4c' ? '<small> конц.</small>' : ''}</span><div class="ai-t"><b>${esc(S.name)}</b><span>${esc(doseLabel(id))}</span></div><button type="button" data-rm="${id}" aria-label="Убрать ${esc(S.name)}">×</button></div>`; }).join('');
 }
 
 function renderSpecimen() {
@@ -294,24 +294,126 @@ function paintExperiment() {
   $('#simStatus').textContent = state.busy ? 'Добавляем реагенты' : state.ran ? 'Наблюдай и изучай журнал' : state.sel.length ? `Выбрано: ${state.sel.length} · настрой температуру` : 'Готов к открытиям';
 }
 /* ---------- Колба: выбор ---------- */
-const isInd = x => x === 'php' || x === 'starch';
+const isInd = x => !!getSub(x)?.ind;
 function toggle(id) {
   const i = state.sel.indexOf(id);
-  if (i >= 0) state.sel.splice(i, 1);
+  if (i >= 0) { state.sel.splice(i, 1); delete state.doses[id]; state.doseId = state.sel[state.sel.length - 1] || null; }
   else {
     if (!isInd(id) && state.sel.filter(x => !isInd(x)).length >= 3) { toast('В колбе максимум три вещества (индикаторы не в счёт). Уберите одно.'); return; }
-    state.sel.push(id);
+    state.sel.push(id); state.doses[id] = ChemistryQuant.defaults([id])[id]; state.doseId = id;
   }
   state.ran = false; state.busy = false; state.runId++; clearReport();
-  renderSel(); Lab.setScene(state.sel, state.T >= 150);
+  renderSel(); Lab.setScene(state.sel, state.T >= 150, state.doses);
 }
-function renderSel() { renderAdded(); $('#go').disabled = !state.sel.length || state.busy; $('#go').textContent = state.busy ? 'Добавляем реагенты…' : state.ran ? 'Повторить опыт' : 'Смешать'; paintSel(); renderSpecimen(); paintExperiment(); }
+function renderSel() { renderAdded(); renderDosing(); $('#shake').disabled=state.busy; $('#go').disabled = !state.sel.length || state.busy; $('#go').textContent = state.busy ? 'Добавляем реагенты…' : state.ran ? 'Повторить опыт' : 'Смешать'; paintSel(); renderSpecimen(); paintExperiment(); }
 function paintSel() { document.querySelectorAll('.ing[data-id]').forEach(b => { const sel = state.sel.includes(b.dataset.id); b.classList.toggle('sel', sel); b.setAttribute('aria-pressed', sel); }); }
-function clearReport() { $('#report').innerHTML = '<div class="empty">Здесь появится подробный разбор каждой реакции.</div>'; $('#resCard').hidden = true; }
+function clearReport() { state.quantitative = null; $('#quantitySummary').hidden = true; $('#shake').hidden = true; $('#report').innerHTML = '<div class="empty">Здесь появится подробный разбор каждой реакции.</div>'; $('#resCard').hidden = true; }
 function loadCombo(ids, T) {
-  state.sel = ids.slice(); setT(T == null ? 25 : T); renderSel(); Lab.setScene(state.sel, state.T >= 150); run();
+  state.sel = ids.slice(); state.doses = ChemistryQuant.defaults(ids); state.doseId = ids[ids.length - 1]; setT(T == null ? 25 : T); renderSel(); Lab.setScene(state.sel, state.T >= 150, state.doses); run();
 }
 function comboT(ids, h) { const need = requiredT(ids); return need > 25 ? Math.min(900, Math.ceil((need + 20) / 50) * 50) : (h ? 150 : 25); }
+
+
+/* ---------- Количества и инструменты ---------- */
+const qfmt = (n, digits=3) => n == null ? 'нет данных' : Number(n.toFixed(digits)).toLocaleString('ru-RU', {maximumFractionDigits:digits});
+function doseLabel(id) {
+  const t = ChemistryQuant.total(id, state.doses[id]);
+  return `${t.mg == null ? 'Масса не определена' : qfmt(t.mg) + ' мг'}` + (ChemistryQuant.liquid(id) ? ` · ${qfmt(t.ml,6)} мл${id !== 'h2o' ? ' раствора' : ''}` : '');
+}
+function renderDosing(force=false) {
+  const target = $('#doseTarget');
+  if (!target.options.length) target.innerHTML = `<optgroup label="Растворы и вещества">${REAGENTS.map(r=>`<option value="${r.id}">${esc(r.name)} · ${esc(r.f)}</option>`).join('')}</optgroup><optgroup label="Элементы">${ELS.map(r=>`<option value="${r.sym}">${esc(r.name)} · ${r.sym}</option>`).join('')}</optgroup>`;
+  const id = state.doseId || target.value || 'h2o';
+  const changed = target.dataset.active !== id || force;
+  target.value = id;
+  if (changed) {
+    target.dataset.active = id;
+    $('#doseMode').value = ChemistryQuant.liquid(id) ? 'volume' : 'mass';
+    $('#doseAmount').value = ChemistryQuant.liquid(id) ? '0.1' : '10';
+    $('#doseConcentration').value = ChemistryQuant.stock(id);
+  }
+  const kind = $('#doseMode').value;
+  $('#doseMode option[value="volume"]').disabled = !ChemistryQuant.liquid(id);
+  $('#doseAmountLabel').textContent = kind === 'volume' ? 'Объём, мл' : ChemistryQuant.solution(id) ? 'Масса вещества в растворе, мг' : 'Масса, мг';
+  $('#doseAmount').max = kind === 'volume' ? '100' : '10000';
+  $('#doseConcentrationWrap').hidden = !ChemistryQuant.solution(id);
+  $('#doseConcentration').max = getSub(id).maxC || 2;
+  $('#dosePresets').innerHTML = (kind==='volume' ? [[.01,'10 мкл'],[.1,'100 мкл'],[1,'1 мл']] : [[1,'1 мг'],[10,'10 мг'],[100,'100 мг']]).map(([a,l])=>`<button type="button" class="tool" data-dose-preset="${a}">${l}</button>`).join('');
+  $('#doseAdd').disabled = $('#doseReplace').disabled = state.busy;
+  previewDose();
+}
+function readDose() { return ChemistryQuant.dose($('#doseTarget').value, $('#doseAmount').value, $('#doseMode').value, $('#doseConcentration').value); }
+function previewDose() {
+  try {
+    const id=$('#doseTarget').value, d=readDose(), t=ChemistryQuant.total(id,[d]);
+    $('#dosePreview').textContent = `${d.kind==='volume'?'Пипетка':'Весы'}: ${qfmt(t.mg,6)} мг${ChemistryQuant.solution(id)?' растворённого вещества':''}${t.ml ? ' · '+qfmt(t.ml,6)+' мл' : ''}${t.n==null?'':' · '+qfmt(t.n*1e6,6)+' мкмоль'}`;
+  } catch(e) { $('#dosePreview').textContent=e.message; }
+}
+function dispense(append) {
+  if(state.busy)return;
+  try {
+    const id=$('#doseTarget').value, d=readDose();
+    if(!state.sel.includes(id) && !isInd(id) && state.sel.filter(x=>!isInd(x)).length>=3) throw new Error('В колбе максимум три вещества; уберите одно.');
+    const lots = append ? [...(state.doses[id]||[]),d] : [d];
+    const next = {...state.doses,[id]:lots};
+    const ids = state.sel.includes(id)?state.sel:[...state.sel,id];
+    const volume = ids.reduce((ml,i)=>ml+ChemistryQuant.total(i,next[i]).ml,0);
+    if(volume>100+1e-9)throw new Error('Виртуальная колба вмещает до 100 мл. Уменьшите дозу.');
+    if(!ChemistryQuant.liquid(id) && ChemistryQuant.total(id,lots).mg>10000+1e-9)throw new Error('Предел одного образца — 10 000 мг.');
+    state.sel=ids;state.doses=next;state.doseId=id;
+    state.ran=false;state.busy=false;state.runId++;clearReport();renderSel();Lab.setScene(state.sel,state.T>=150,state.doses);
+    $('#doseStatus').textContent=`${append?'Добавлено':'Задано'}: ${getSub(id).name} · ${doseLabel(id)}. ${lots.length} ${lots.length===1?'доза':'доз(ы)'}.`;
+    run({pipette:d.kind==='volume'?id:null,pipetteMl:ChemistryQuant.total(id,[d]).ml});
+  } catch(e) { $('#doseStatus').textContent=e.message; }
+}
+function bindDosing() {
+  $('#doseTarget').onchange=()=>{state.doseId=$('#doseTarget').value;renderDosing(true);};
+  $('#doseMode').onchange=()=>{ $('#doseAmount').value=$('#doseMode').value==='volume'?.1:10;renderDosing(); };
+  for(const id of ['doseAmount','doseConcentration'])$('#'+id).oninput=previewDose;
+  $('#dosePresets').onclick=e=>{const b=e.target.closest('[data-dose-preset]');if(b){$('#doseAmount').value=b.dataset.dosePreset;previewDose();}};
+  $('#doseAdd').onclick=()=>dispense(true);$('#doseReplace').onclick=()=>dispense(false);
+  $('#shake').onclick=()=>{if(!state.busy && state.ran){if(Lab.aerate)Lab.aerate();run({live:true,aerate:true});}};
+}
+function doseEvents(events) {
+  const ph=ChemistryQuant.strongPH(state.sel,state.doses,state.T);
+  const dyes=state.sel.filter(id=>getSub(id)?.range || id==='php');
+  if(ph!=null && state.sel.includes('php'))events=events.filter(e=>e.kind!=='ind' || !(e.pair||[]).includes('php'));
+  for(const id of dyes) {
+    const S=getSub(id);
+    let p=ph, estimated=false;
+    if(p==null && state.sel.filter(i=>!isInd(i)).length===1) {
+      const only=getSub(state.sel.find(i=>!isInd(i)));
+      if(only?.acid)p=1;if(only?.base)p=12;estimated=p!=null;
+    }
+    if(id==='php' && ph==null)continue;
+    const range=S.range || [8.2,10], colors=S.colors || ['#bcd6ea','#d6246e'];
+    const k=p==null?null:Math.max(0,Math.min(1,(p-range[0])/(range[1]-range[0])));
+    const blend=k==null?null:'#'+[1,3,5].map(i=>Math.round(parseInt(colors[0].slice(i,i+2),16)*(1-k)+parseInt(colors[1].slice(i,i+2),16)*k).toString(16).padStart(2,'0')).join('');
+    events.push({kind:'ind',type:'Индикатор · '+S.name,source:'curated',subs:[],pair:[id],obs:p==null?[]:[`Цвет соответствует ${estimated?'качественно кислой / щелочной среде':'идеальному pH ≈ '+qfmt(p,2)}`],why:p==null?'Цвет не рассчитан: для этой смеси нет модели кислотно-основного равновесия.':`Диапазон перехода ${range[0]}–${range[1]}. Оттенок интерполирован для визуализации, без спектральной модели. Индикатор предполагается следовой добавкой.`,fx:blend?{sol:id==='php' && k===0?null:blend}:{},tags:[]});
+  }
+  const redox=events.find(e=>e.redox);
+  if(redox) {
+    const volume=state.sel.reduce((v,id)=>v+ChemistryQuant.total(id,state.doses[id]).ml,0)/1000;
+    const c=ChemistryQuant.total('naoh',state.doses.naoh).n/volume;
+    if(state.T<5 || state.T>60 || c<.01) { redox.kind='none';redox.fx={};redox.obs=[];redox.why='Для этого сценария нужна суммарная концентрация NaOH не ниже 0,01 моль/л и температура 5–60 °C. Кинетика при других условиях не рассчитана.';redox.redox=null; }
+  }
+  return events;
+}
+function renderQuantities(events) {
+  const q=state.quantitative, p=$('#quantitySummary'), r=q.reaction;
+  let h='<div class="bench-h"><span class="sec-h">Баланс опыта</span><span class="tag">'+qfmt(q.inputs.reduce((v,t)=>v+t.ml,0))+' / 100 мл</span></div><div class="quantity-table-wrap"><table><thead><tr><th>Добавлено</th><th>Масса вещества, мг</th><th>Раствор / вода, мл</th><th>Количество, мкмоль</th></tr></thead><tbody>';
+  h+=q.inputs.map(t=>`<tr><td>${esc(getSub(t.id).name)}</td><td>${qfmt(t.mg,6)}</td><td>${qfmt(t.ml,6)}</td><td>${qfmt(t.n==null?null:t.n*1e6,6)}</td></tr>`).join('')+'</tbody></table></div>';
+  if(r) {
+    h+=`<p><b>Лимитирует:</b> ${r.limiting.map(id=>esc(getSub(id).name)).join(' + ')} · ξ = ${qfmt(r.extent*1e6,6)} мкмоль${r.heatJ==null?'':` · ΔH опыта ≈ ${qfmt(r.heatJ,6)} Дж`}</p>`;
+    h+='<div class="product-chips">'+r.products.map(t=>`<span>${fHTML(t.f)} (${esc(t.ph)}) · ${qfmt(t.mg,6)} мг</span>`).join('')+'</div>';
+    const excess=q.inputs.filter(t=>r.remaining[t.id]>1e-12);
+    if(excess.length)h+=`<p class="meta">Осталось: ${excess.map(t=>`${esc(getSub(t.id).name)} — ${qfmt(r.remaining[t.id]*ChemistryQuant.molarMass(getSub(t.id).f)*1000,6)} мг`).join('; ')}.</p>`;
+  }
+  const ph=ChemistryQuant.strongPH(state.sel,state.doses,state.T);
+  if(ph!=null)h+=`<p><b>pH ≈ ${qfmt(ph,2)}</b> · идеальный раствор, 25 °C, Kᵥ = 10⁻¹⁴; следовые индикаторы.</p>`;
+  h+=`<p class="meta">${esc(q.reason)}</p>`;p.innerHTML=h;p.hidden=false;
+  $('#shake').hidden=!events.some(e=>e.redox);$('#shake').disabled=state.busy;
+}
 
 /* ---------- Главный ход ---------- */
 function run(opt = {}) {
@@ -319,7 +421,8 @@ function run(opt = {}) {
   state.paused = false; $('#pauseSim').setAttribute('aria-pressed', false); $('#pauseSim').textContent = 'Ⅱ Пауза'; if (Lab.setPaused) Lab.setPaused(false);
   const token = ++state.runId;
   ac();
-  const events = analyzeT(state.sel, state.T);
+  const events = doseEvents(analyzeT(state.sel, state.T));
+  state.quantitative = ChemistryQuant.calculate(state.sel, state.doses, events); renderQuantities(events);
   state.sig = events.map(evSig).join('#'); state.ran = true;
   const order = { rx: 0, phys: 1, flame: 1, ind: 2, none: 3, unknown: 3, info: 4 };
   events.sort((a, b) => order[a.kind] - order[b.kind]);
@@ -347,7 +450,7 @@ function run(opt = {}) {
     state.busy = false; renderSel(); audio(events); showResult(events, fresh);
     if (state.mode === 'mission') missionCheck(events, 0);
   };
-  const pourMs = Lab.react(events, { noPour: !!opt.live, speed: animSpeed(state.T), onReady: ready }) || 0;
+  const pourMs = Lab.react(events, { noPour: !!opt.live, speed: animSpeed(state.T), doses: state.doses, quantities: state.quantitative, pipette: opt.pipette || null, pipetteMl: opt.pipetteMl, aerate: !!opt.aerate, onReady: ready }) || 0;
   state.busy = pourMs > 0; renderSel();
 }
 function showResult(events, fresh) {
@@ -454,6 +557,8 @@ const SHOW = [
   ['K h2o php', 0, 'Калий в воде', 'Лиловое пламя, малиновый раствор', ['#b98ce0', '#d6246e']],
   ['Al fe2o3', 1, 'Термит', 'Жидкое железо и снопы искр', ['#fff0c0', '#ff9a3a', '#5a5d61']],
   ['Mg O', 1, 'Магниевая вспышка', 'Ослепительный белый свет', ['#ffffff', '#f7f7f5', '#dfe7fb']],
+  ['indigo glucose naoh', 0, 'Химический светофор', 'Встряхни: зелёный → красный → жёлтый', ['#39a75e','#d74646','#e7c82d']],
+  ['methylene glucose naoh', 0, 'Синяя бутылка', 'Кислород возвращает синюю окраску', ['#1551bc','#e8f3f5']],
   ['Cu agno3', 0, 'Серебряное дерево', 'Кристаллы серебра на меди', ['#c26b3a', '#cfd2d6', '#3b8fd9']]
 ];
 /* ---------- Звук, частицы, всплывающие сообщения ---------- */
@@ -548,7 +653,7 @@ function bind() {
   $('#logo').onclick = () => show('menu');
   $('#ctaPlay').onclick = () => { const nm = nextMission(); if (nm) openMission(nm.id); else show('map'); };
   $('#go').addEventListener('click', () => run());
-  $('#clear').onclick = () => { state.sel = []; state.ran = false; state.busy = false; state.runId++; renderSel(); Lab.setScene([], false); clearReport(); };
+  $('#clear').onclick = () => { state.sel = []; state.doses = {}; state.doseId = null; state.ran = false; state.busy = false; state.runId++; renderSel(); Lab.setScene([], false); clearReport(); };
   const snd = $('#snd'); const paint = () => { snd.setAttribute('aria-pressed', G.sound); snd.textContent = G.sound ? 'Звук: вкл' : 'Звук: выкл'; };
   snd.onclick = () => { G.sound = !G.sound; save(); paint(); }; paint();
   $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') $('#modal').hidden = true; });
@@ -560,7 +665,7 @@ function bind() {
   const quality = $('#quality'); quality.hidden = !Lab.setQuality;
   const paintQuality = () => { quality.setAttribute('aria-pressed', state.lowQuality); quality.textContent = state.lowQuality ? 'Графика: лёгкая' : 'Графика: высокая'; if (Lab.setQuality) Lab.setQuality(state.lowQuality); };
   quality.onclick = () => { state.lowQuality = !state.lowQuality; store.set('lowQuality', state.lowQuality); paintQuality(); }; paintQuality();
-  paintT(); renderAdded();
+  bindDosing(); paintT(); renderAdded(); renderDosing();
 }
 bind(); renderMe(); if (!hero3D($('#heroArt'))) heroArt(); show('menu');
 Lab.setScene([], false);

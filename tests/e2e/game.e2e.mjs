@@ -1,5 +1,5 @@
 // Браузерная проверка собранной игры: вся кампания, мобильный экран, отсутствие ошибок.
-import { test, before, after } from 'node:test';
+import { test, before, after, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { serve } from './serve.mjs';
@@ -13,6 +13,7 @@ if (process.env.CHROMIUM_PATH) launch.executablePath = process.env.CHROMIUM_PATH
 
 before(async () => { server = await serve(); url = `http://127.0.0.1:${server.address().port}/`; browser = await chromium.launch(launch); });
 after(async () => { await browser?.close(); server?.close(); });
+afterEach(async () => { for(const context of browser.contexts()) await context.close(); });
 
 function watchErrors(page) {
   const errs = [];
@@ -26,8 +27,44 @@ test('3D-сцена запускается', async () => {
   await page.goto(url, { waitUntil: 'domcontentloaded' });
   await page.click('[data-go="free"]');
   assert.ok(await page.evaluate(() => !!document.getElementById('lab3d')), 'нет WebGL-холста');
+  await page.waitForFunction(() => document.getElementById('lab3d').dataset.modelsLoaded === '5');
+  assert.equal(await page.getAttribute('#lab3d','data-asset-error'),null);
   await page.click('[data-show="0"]'); await page.waitForTimeout(1500);
   assert.deepEqual(errs, []); await page.close();
+});
+
+test('пипетка, миллиграммы, концентрация и остатки работают в браузере', {timeout:90000}, async()=>{
+  const page=await browser.newPage({viewport:{width:1280,height:900},reducedMotion:'reduce'}),errs=watchErrors(page);
+  await page.goto(url,{waitUntil:'domcontentloaded'});await page.click('[data-go="free"]');
+  await page.selectOption('#doseTarget','hcl');await page.fill('#doseAmount','1');await page.click('#doseReplace');
+  await page.selectOption('#doseTarget','naoh');await page.fill('#doseAmount','0.5');await page.click('#doseReplace');
+  assert.match(await page.textContent('#quantitySummary'),/Лимитирует: Гидроксид натрия/);
+  assert.match(await page.textContent('#quantitySummary'),/2,922 мг/);
+  assert.match(await page.textContent('#quantitySummary'),/1,8229 мг/);
+  await page.click('#clear');await page.selectOption('#doseTarget','Zn');
+  await page.fill('#doseAmount','1.234');await page.click('#doseReplace');
+  assert.match(await page.textContent('#added'),/1,234 мг/);
+  await page.fill('#doseAmount','0.001');await page.click('#doseAdd');
+  assert.match(await page.textContent('#added'),/1,235 мг/);
+  await page.click('#clear');await page.selectOption('#doseTarget','hcl');
+  await page.fill('#doseAmount','-1');await page.click('#doseReplace');
+  assert.match(await page.textContent('#doseStatus'),/Введите/);
+  assert.equal(await page.isHidden('#quantitySummary'),true);
+  await page.close();assert.deepEqual(errs,[]);
+});
+
+test('индигокармин и метиленовый синий поддерживают повторное встряхивание', {timeout:90000}, async()=>{
+  const page=await browser.newPage({viewport:{width:1280,height:900},reducedMotion:'reduce'}),errs=watchErrors(page);
+  await page.goto(url,{waitUntil:'domcontentloaded'});await page.click('[data-go="free"]');
+  for(const [id,title] of [['indigo','Химический светофор'],['methylene','Синяя бутылка']]) {
+    await page.click('#clear');
+    for(const reagent of [id,'glucose','naoh']) {await page.fill('#stripSearch',reagent);await page.click(`.ing[data-id="${reagent}"]`);}
+    await page.click('#go');await page.waitForSelector('#shake:not([hidden])');
+    assert.match(await page.textContent('#report'),new RegExp(title));
+    await page.click('#shake');await page.click('#shake');
+    assert.match(await page.textContent('#quantitySummary'),/требуется модель совместных реакций/);
+  }
+  await page.close();assert.deepEqual(errs,[]);
 });
 
 test('кампания проходится целиком на три звезды', { timeout: 600000 }, async () => {
@@ -105,4 +142,17 @@ test('без WebGL работают химия, паспорт и темпера
   assert.match(await page.textContent('#report'), /Замерзание/);
   await page.click('#pauseSim'); assert.equal(await page.getAttribute('#pauseSim', 'aria-pressed'), 'true');
   assert.deepEqual(errs, []); await page.close();
+});
+
+test('анимация пипетки завершается и очистка отменяет дозирование на телефоне', {timeout:90000}, async()=>{
+  const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true}),errs=watchErrors(page);
+  await page.goto(url,{waitUntil:'domcontentloaded'});await page.tap('[data-go="free"]');
+  await page.waitForFunction(()=>document.getElementById('lab3d').dataset.modelsLoaded==='5');
+  await page.selectOption('#doseTarget','h2o');await page.fill('#doseAmount','0.01');await page.tap('#doseReplace');
+  await page.waitForFunction(()=>!document.getElementById('go').disabled,null,{timeout:30000});
+  assert.match(await page.textContent('#quantitySummary'),/0,01/);
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),390);
+  await page.tap('#doseAdd');await page.tap('#clear');await page.waitForTimeout(2500);
+  assert.equal(await page.isHidden('#resCard'),true);assert.equal(await page.isHidden('#quantitySummary'),true);
+  await page.close();assert.deepEqual(errs,[]);
 });

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="Химлаб 118 — химическая 3D-игра: кампания из 29 миссий, коллекция из 90 реальных реакций, 118 элементов и управление температурой.">
+<meta name="description" content="Химлаб 118 — химическая 3D-игра: кампания из 29 миссий, коллекция из 93 химических сценариев, 118 элементов и управление температурой.">
 <meta name="theme-color" content="#091522">
 <title>Химлаб 118</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -53,7 +53,7 @@
     <div class="modes">
       <button class="mode" type="button" data-go="map"><span class="mi" style="background:var(--gold-soft);color:var(--gold)">29</span><h3>Кампания</h3><p>Пять глав миссий: от первой нейтрализации до чёрной змеи из сахара.</p><span class="mstat" id="mmMap"></span></button>
       <button class="mode" type="button" data-go="free"><span class="mi" style="background:var(--accent-soft);color:var(--accent)">118</span><h3>Лаборатория</h3><p>Любые элементы и реактивы без ограничений, витрина красочных опытов.</p><span class="mstat">песочница</span></button>
-      <button class="mode" type="button" data-go="col"><span class="mi" style="background:color-mix(in srgb,var(--r2) 18%,var(--panel));color:var(--r2)">90</span><h3>Коллекция</h3><p>Карточки реакций от обычных до легендарных. Найдите все.</p><span class="mstat" id="mmCol"></span></button>
+      <button class="mode" type="button" data-go="col"><span class="mi" style="background:color-mix(in srgb,var(--r2) 18%,var(--panel));color:var(--r2)">93</span><h3>Коллекция</h3><p>Карточки реакций от обычных до легендарных. Найдите все.</p><span class="mstat" id="mmCol"></span></button>
       <button class="mode" type="button" data-go="ach"><span class="mi" style="background:color-mix(in srgb,var(--ok) 16%,var(--panel));color:var(--ok)">★</span><h3>Достижения</h3><p>Особые открытия, за которые дают бонусный опыт.</p><span class="mstat" id="mmAch"></span></button>
     </div>
     <footer class="note">
@@ -70,7 +70,7 @@
 
   <!-- ЛАБОРАТОРИЯ -->
   <section class="screen game" id="scrLab" hidden>
-    <div class="lab-heading"><div><span class="sec-h">Химлаб / исследовательский стол</span><h1 id="labTitle">Свободная лаборатория</h1></div><div class="lab-tools"><button type="button" id="cameraReset" class="tool" aria-label="Вернуть камеру к колбе">◎ Камера</button><button type="button" id="pauseSim" class="tool" aria-pressed="false">Ⅱ Пауза</button><button type="button" id="quality" class="tool" aria-pressed="false">Графика: высокая</button></div></div>
+    <div class="lab-heading"><div><span class="sec-h">Химлаб / исследовательский стол</span><h1 id="labTitle">Свободная лаборатория</h1></div><div class="lab-tools"><button type="button" id="shake" class="tool" hidden>↻ Встряхнуть</button><button type="button" id="cameraReset" class="tool" aria-label="Вернуть камеру к колбе">◎ Камера</button><button type="button" id="pauseSim" class="tool" aria-pressed="false">Ⅱ Пауза</button><button type="button" id="quality" class="tool" aria-pressed="false">Графика: высокая</button></div></div>
     <div class="experiment-steps" aria-label="Этапы опыта"><span data-step="1" class="active"><b>01</b> Выбери реагенты</span><span data-step="2"><b>02</b> Проведи опыт</span><span data-step="3"><b>03</b> Объясни результат</span><em id="simStatus" role="status" aria-live="polite">Готов к открытиям</em></div>
     <div class="stage" id="stage">
       <div class="canvas-wrap"><canvas id="lab" aria-label="Колба с реакцией"></canvas><div class="temp" id="temp" hidden></div></div>
@@ -87,6 +87,18 @@
       </aside>
       <div class="hud hud-act"><button class="btn gold go" id="go" type="button">Смешать</button><button class="btn ghost" id="clear" type="button">Очистить</button></div>
     </div>
+    <section class="dosing panel" aria-labelledby="doseTitle">
+      <div class="dose-head"><div><span class="sec-h">Инструменты исследователя</span><h2 id="doseTitle">Точное дозирование</h2></div><span class="dose-resolution">Весы 0,001 мг · пипетка 1 мкл</span></div>
+      <div class="dose-grid">
+        <label>Реагент<select id="doseTarget" aria-label="Реагент для дозирования"></select></label>
+        <label>Инструмент<select id="doseMode"><option value="mass">Весы · мг вещества</option><option value="volume">Пипетка · мл раствора</option></select></label>
+        <label><span id="doseAmountLabel">Масса, мг</span><input id="doseAmount" type="number" min="0.001" max="10000" step="0.001" value="10" inputmode="decimal" required></label>
+        <label id="doseConcentrationWrap">Концентрация, моль/л<input id="doseConcentration" type="number" min="0.000001" max="2" step="0.000001" value="0.1" inputmode="decimal" required></label>
+      </div>
+      <div class="dose-footer"><div><div class="dose-presets" id="dosePresets"></div><p id="dosePreview" class="meta" aria-live="polite"></p></div><div class="dose-actions"><button class="btn ghost" id="doseReplace" type="button">Задать количество</button><button class="btn gold" id="doseAdd" type="button">Добавить дозу</button></div></div>
+      <p id="doseStatus" class="dose-status" role="status" aria-live="polite">Числа задают виртуальную дозу. Для растворов мг — масса растворённого вещества. Число капель в анимации условно.</p>
+    </section>
+    <section class="quantity-summary panel" id="quantitySummary" aria-label="Учёт количества веществ" hidden></section>
     <div class="strip">
       <div class="shelf-label"><span class="sec-h">Полка реагентов</span><span>Нажми на карточку, чтобы добавить</span></div><div class="strip-h"><div class="stabs" id="stripTabs"></div><input id="stripSearch" type="search" placeholder="Поиск: натрий, Cu, кислота…" autocomplete="off" aria-label="Поиск вещества"></div>
       <div class="strip-row" id="stripRow"></div>
@@ -94,9 +106,9 @@
     <div class="specimen-panel panel" id="specimenPanel"><span class="sec-h">Паспорт вещества</span><p class="meta">Выберите реагент — здесь появятся его свойства и поведение в колбе.</p></div>
     <details class="model-notes panel"><summary>Научная модель и границы точности <span>Условия · источники · приближения</span></summary><div>
       <p>Уравнения проверяются по атомам и заряду. ΔH° относится к уравнению с указанными коэффициентами и стандартным состояниям при 25 °C; это не расчёт изменения температуры колбы.</p>
-      <p>Количество, концентрация, давление и порядок добавления не задаются. Для трёх веществ показываются известные парные реакции или отдельный сценарий, а не полный состав равновесной смеси. Цвет, длительность и размер частиц иллюстративны; численный pH не рассчитывается.</p>
+      <p>Масса, объём и концентрация задаются в панели дозирования. Учёт массы ведётся в целых микрограммах, объёма — в целых микролитрах; это разрешение виртуальных инструментов, а не заявленная точность реальных весов и пипетки. Давление и порядок последовательных химических превращений не рассчитываются. Для трёх веществ показываются известные парные реакции или отдельный сценарий, а не полный состав равновесной смеси. Для одной необратимой реакции рассчитывается теоретический выход по лимитирующему реагенту. Уровень жидкости при малых объёмах увеличен для видимости; шкала колбы, число капель, цвет, длительность и размер частиц иллюстративны. Численный pH доступен только для воды, HCl/HNO₃ и NaOH/KOH при 25 °C в модели идеального раствора; гидролиз, буферы и активности не учитываются. Индикаторы предполагаются следовыми добавками.</p>
       <p>Высокая температура означает режим нагревателя или пламени. Открытый водный раствор не остаётся жидким при 900 °C. Замерзание растворов при −7 °C — условный сценарий. Температурные пороги зависят от условий; скорость анимации не является измеренной скоростью реакции.</p>
-      <div class="source-links"><a href="https://openstax.org/books/chemistry-2e/pages/11-4-colligative-properties" target="_blank" rel="noopener noreferrer">OpenStax: фазовые переходы ↗</a><a href="https://periodic-table.rsc.org/" target="_blank" rel="noopener noreferrer">RSC: свойства элементов ↗</a><a href="https://openstax.org/books/chemistry-2e/pages/12-5-collision-theory" target="_blank" rel="noopener noreferrer">OpenStax: кинетика ↗</a><a href="https://www.chem.indiana.edu/faculty-research/faculty-resources/chemistry-demos/demo/catalysis-of-the-decomposition-of-h2o2/" target="_blank" rel="noopener noreferrer">Indiana University: катализ ↗</a></div>
+      <div class="source-links"><a href="https://www.ciaaw.org/abridged-atomic-weights.htm" target="_blank" rel="noopener noreferrer">CIAAW: атомные массы ↗</a><a href="https://chemed.chem.purdue.edu/demos/demosheets/19.2.html" target="_blank" rel="noopener noreferrer">Purdue: химический светофор ↗</a><a href="https://openstax.org/books/chemistry-2e/pages/11-4-colligative-properties" target="_blank" rel="noopener noreferrer">OpenStax: фазовые переходы ↗</a><a href="https://periodic-table.rsc.org/" target="_blank" rel="noopener noreferrer">RSC: свойства элементов ↗</a><a href="https://openstax.org/books/chemistry-2e/pages/12-5-collision-theory" target="_blank" rel="noopener noreferrer">OpenStax: кинетика ↗</a><a href="https://www.chem.indiana.edu/faculty-research/faculty-resources/chemistry-demos/demo/catalysis-of-the-decomposition-of-h2o2/" target="_blank" rel="noopener noreferrer">Indiana University: катализ ↗</a></div>
     </div></details>
     <div class="below">
       <section class="panel mcard" id="mPanel" hidden></section>

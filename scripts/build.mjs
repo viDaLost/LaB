@@ -1,5 +1,5 @@
 // Собирает игру в один файл dist/index.html (+ локальная копия Three.js).
-import { readFileSync, writeFileSync, mkdirSync, copyFileSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, copyFileSync, cpSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -14,8 +14,8 @@ if (!ui.includes('/*LAB*/')) throw new Error('src/ui.js: нет метки /*LAB
 let html = src('app.html');
 const parts = {
   '/*STYLES*/': src('styles.css'),
-  '<!--THREE-->': '<script src="vendor/three.min.js"></script>',
-  '<!--ENGINE-->': `<script>\n${src('engine.js')}</script>`,
+  '<!--THREE-->': '<script src="vendor/three.min.js"></script><script src="vendor/GLTFLoader.js"></script>',
+  '<!--ENGINE-->': `<script>\n${src('engine.js')}\n${src('quantity.js')}</script>`,
   '<!--MISSIONS-->': `<script>\n${src('missions.js')}</script>`,
   '<!--UI-->': `<script>\n${ui.replace('/*LAB*/', () => lab)}</script>`
 };
@@ -28,5 +28,8 @@ rmSync(dist, { recursive: true, force: true });
 mkdirSync(join(dist, 'vendor'), { recursive: true });
 writeFileSync(join(dist, 'index.html'), html);
 copyFileSync(join(root, 'vendor', 'three.min.js'), join(dist, 'vendor', 'three.min.js'));
+copyFileSync(join(root, 'vendor', 'GLTFLoader.js'), join(dist, 'vendor', 'GLTFLoader.js'));
+copyFileSync(join(root, 'vendor', 'THREE-LICENSE.txt'), join(dist, 'vendor', 'THREE-LICENSE.txt'));
+cpSync(join(root, 'assets'), join(dist, 'assets'), { recursive: true });
 writeFileSync(join(dist, '.nojekyll'), '');
 console.log(`dist/index.html собран: ${(html.length / 1024).toFixed(0)} КБ`);

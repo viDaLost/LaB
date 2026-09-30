@@ -13,7 +13,7 @@ T3.env = (renderer, dark) => {
   for (const [x, y, z, w, h, k] of [[-7, 8, 5, 6, 2.5, 1], [8, 5, -4, 3, 6, .8], [0, 12, 6, 10, 1.5, 1.2]]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(k, k, k), side: THREE.DoubleSide })); m.position.set(x, y, z); m.lookAt(0, 0, 0); s.add(m); }
   const tex = pm.fromScene(s, .02).texture; pm.dispose(); return tex;
 };
-// Repeatable textures generated locally: no downloads or external asset dependencies.
+// Procedural textures remain as a fallback while local photo PBR maps load.
 T3.texture = (kind, repeat = 1) => {
   const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
   let seed = 118; const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
@@ -81,7 +81,9 @@ const Lab3D = (() => {
   const add = (o, x, y, z) => { if (x !== undefined) o.position.set(x, y, z); scene.add(o); return o; };
 
   // комната
-  const tableMat = new THREE.MeshStandardMaterial({ color: 0x233e4b, roughness: .72, metalness: .05, bumpMap: T3.texture('stone', 5), bumpScale: .035, envMapIntensity: .6 });
+  const textureLoader = new THREE.TextureLoader();
+  const photo = (name, color=false) => { const t=textureLoader.load('assets/textures/concrete-'+name+'.jpg'); t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(4,2);if(color)t.encoding=THREE.sRGBEncoding;return t; };
+  const tableMat = new THREE.MeshStandardMaterial({ map:photo('color',true),normalMap:photo('normal'),normalScale:new THREE.Vector2(.35,.35),roughnessMap:photo('roughness'),color: 0x8aa6ab, roughness: .72, metalness: .05, bumpMap: T3.texture('stone', 5), bumpScale: .035, envMapIntensity: .6 });
   const table = add(new THREE.Mesh(new THREE.BoxGeometry(18, .3, 8), tableMat), 0, TABLE_Y - .15, -.6); table.receiveShadow = true;
   const edgeMat = new THREE.MeshStandardMaterial({ color: 0x2a3036, roughness: .4 });
   add(new THREE.Mesh(new THREE.BoxGeometry(18, .06, .08), edgeMat), 0, TABLE_Y - .02, 3.42);
@@ -208,7 +210,7 @@ const Lab3D = (() => {
     return RCOLOR[S.id] || (S.ions && solColor(S.ions.map(i => i[0]))) || '#bcd6ea';
   }
   function makeBottle(id, slot) {
-    const S = getSub(id), g = new THREE.Group(), col = contentColor(S);
+    const S = getSub(id), g = new THREE.Group(), col = S.color || contentColor(S);
     const kind = S.kind === 'el' ? (S.el.st === 'g' ? 'gas' : S.el.st === 'l' ? 'liq' : 'jar') : (S.ph === 'g' ? 'gas' : S.ph === 's' ? 'jar' : 'liq');
     const lab = new THREE.MeshStandardMaterial({ map: label(S, id), roughness: .75 });
     const clear = col === '#bcd6ea' || col === '#eef2f4';
@@ -246,7 +248,7 @@ const Lab3D = (() => {
     const [x, z] = slot; g.position.set(x, TABLE_Y, z); g.rotation.y = -Math.atan2(x, 5 - z) * .7;
     g.traverse(o => { if (o.isMesh && o !== content) o.castShadow = true; });
     g.userData = Object.assign(g.userData, { id, kind, col, clear, mouth, home: g.position.clone(), homeRot: g.rotation.y, content, S });
-    T3.linearize(g); scene.add(g); return g;
+    T3.linearize(g); scene.add(g); installBottleModel(g); return g;
   }
   const streamMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: .85, roughness: .04, envMapIntensity: 1.8 });
   const stream = add(new THREE.Mesh(new THREE.BufferGeometry(), streamMat)); stream.visible = false; stream.renderOrder = 2;
@@ -257,7 +259,51 @@ const Lab3D = (() => {
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const mixRGB = (a, b, t) => a.map((v, i) => Math.round(lerp(v, b[i], t)));
   const toC = c => new THREE.Color(c[0] / 255, c[1] / 255, c[2] / 255).convertSRGBToLinear();
+  let doseLedger = {}, quantities = null, pipetteMotion = null, agitation = -100;
   let sc = null, fx = {}, T = 25, paused = false, clock = 0, rxT = -1, pour = null, W = 0, H = 0, solids = [], speed = 1, lastNow = 0;
+
+  const models = {}, assetStatus=document.createElement('span');
+  assetStatus.className='asset-status';assetStatus.textContent='Загрузка моделей…';wrap.appendChild(assetStatus);
+  let pipette=null;
+  const pipetteHome=new THREE.Vector3(2.05,TABLE_Y,-.5);
+  function clonePart(mesh,material) { const m=new THREE.Mesh(mesh.geometry.clone(),material || mesh.material.clone());m.name=mesh.name;m.castShadow=true;return m; }
+  function installBottleModel(g) {
+    const u=g.userData, source=models[u.kind==='liq'?'reagent-bottle':u.kind==='jar'?'sample-jar':''];
+    if(!source || g.userData.assetModel)return;
+    const shells=g.children.filter(o=>o.isMesh && o.material?.isMeshPhysicalMaterial);
+    const material=shells[0]?.material || T3.glassMat();
+    for(const old of shells){g.remove(old);old.geometry.dispose();if(old.material!==material)old.material.dispose();}
+    const shell=clonePart(source.getObjectByName('GlassShell'),material);g.add(shell);
+    const cap=new THREE.Group(), oldCap=u.cap, capMat=oldCap?.material || dark;
+    source.traverse(o=>{if(o.isMesh && o.name.startsWith('Cap'))cap.add(clonePart(o,capMat));});
+    if(oldCap){cap.visible=oldCap.visible;g.remove(oldCap);oldCap.geometry.dispose();}
+    g.add(cap);u.cap=cap;u.assetModel=true;g.userData.assetModel=true;
+  }
+  function fluidHeight(ml) {
+    // Integrate the actual flask cross-section. 100 mL corresponds to the shoulder.
+    let full=0; const slices=400,dy=T3.HB/slices;
+    for(let i=0;i<slices;i++)full+=Math.PI*Math.pow(T3.rAt((i+.5)*dy)-.035,2)*dy;
+    const target=full*Math.min(100,Math.max(0,ml))/100;let volume=0;
+    for(let i=0;i<slices;i++){volume+=Math.PI*Math.pow(T3.rAt((i+.5)*dy)-.035,2)*dy;if(volume>=target)return Math.max(.055,(i+1)*dy);}
+    return T3.HB;
+  }
+  if(THREE.GLTFLoader) {
+    const loader=new THREE.GLTFLoader();
+    for(const name of ['erlenmeyer','reagent-bottle','sample-jar','beaker','micropipette'])loader.load('assets/models/'+name+'.glb', gltf=>{
+      models[name]=gltf.scene;
+      if(name==='erlenmeyer') {
+        const old=glass.geometry;glass.geometry=models[name].getObjectByName('GlassShell').geometry.clone();glassEdge.geometry=glass.geometry;old.dispose();
+        const lip=clonePart(models[name].getObjectByName('RolledLip'),glassMat);lip.renderOrder=3;scene.add(lip);
+      }
+      if(name==='reagent-bottle' || name==='sample-jar')bottles.forEach(installBottleModel);
+      if(name==='beaker')for(const [x,z] of [[-2.9,-1.6],[2.9,-1.8]]){const b=new THREE.Group();models[name].traverse(o=>{if(o.isMesh)b.add(clonePart(o,T3.glassMat()));});b.position.set(x,TABLE_Y,z);scene.add(b);}
+      if(name==='micropipette') {
+        pipette=new THREE.Group();models[name].traverse(o=>{if(o.isMesh)pipette.add(clonePart(o));});pipette.position.copy(pipetteHome);pipette.rotation.z=-.32;scene.add(pipette);
+      }
+      cv.dataset.modelsLoaded=String(Object.keys(models).length);
+      assetStatus.textContent=Object.keys(models).length===5?'Колба · 100 мл':'Модели: '+Object.keys(models).length+'/5';
+    },undefined,()=>{cv.dataset.assetError='true';assetStatus.textContent='Детальная посуда недоступна';});
+  }
   function disposeObject(g) {
     const mats = new Set(), geos = new Set();
     g.traverse(o => { if (o.geometry) geos.add(o.geometry); if (o.material) for (const m of [].concat(o.material)) if (m !== steel && m !== dark) mats.add(m); });
@@ -280,7 +326,9 @@ const Lab3D = (() => {
     return { mesh: m, sd, k: sd.k, grow: 0, consumed: false, soluble: LabPhysics.material(sd.id).soluble, floats: LabPhysics.material(sd.id).floats };
   }
   function setLiquidH(h) { if (Math.abs(h - liqH) < .006) return; liqH = h; liquid.geometry.dispose(); liquid.geometry = T3.fillGeo(Math.max(.06, h)); liquid.visible = h > .05; }
-  function build(ids) {
+  function build(ids, doses = doseLedger) {
+    doseLedger = doses; quantities = null; pipetteMotion = null; if(pipette){pipette.position.copy(pipetteHome);pipette.rotation.set(0,0,-.32);}
+
     rxT = -1; fx = {}; pour = null; stream.visible = false; flash.style.opacity = 0;
     ripples.forEach(r => { r.life = 0; r.m.material.opacity = 0; });
     bub.list = []; pp.list = []; drops.list = []; grains.list = []; [bub, pp, drops, grains].forEach(P => P.carry = 0); sparks = [];
@@ -290,7 +338,7 @@ const Lab3D = (() => {
     const subs = ids.map(getSub);
     const liquids = subs.filter(S => S.kind === 'rg' && (S.ph === 'aq' || S.ph === 'l'));
     const wet = liquids.length > 0;
-    const ionCols = [];
+    const ionCols = subs.filter(S=>S.color).map(S=>S.color);
     for (const S of subs) if (S.kind === 'rg' && (wet || S.ph !== 's') && (S.ph !== 's' || S.dis)) for (const [i] of (S.ions || [])) if (ION_COLOR[i]) ionCols.push(ION_COLOR[i]);
     if (wet && subs.some(S => S.kind === 'el' && S.el.sym === 'Br')) ionCols.push('#e0892f');
     if (wet && subs.some(S => S.id === 'kmno4')) ionCols.push('#7a1fa8');
@@ -304,7 +352,7 @@ const Lab3D = (() => {
     const colored = mixColors(ionCols);
     const base = rgb(colored || '#bcd6ea');
     const ph = subs.some(S => S.id === 'php') && subs.some(S => ['naoh', 'caoh2', 'nh3', 'na2co3'].includes(S.id)) && !subs.some(S => S.acid);
-    sc = { ids: ids.slice(), wet, level: wet ? .3 + .1 * liquids.length : 0, base: ph ? rgb('#d6246e') : base, col: ph ? rgb('#d6246e') : base, colA: (colored || ph) ? .9 : .42,
+    sc = { ids: ids.slice(), wet, level: wet ? fluidHeight(ids.reduce((ml,id)=>ml+(doseLedger[id]?ChemistryQuant.total(id,doseLedger[id]).ml:10),0))/T3.HB : 0, base: ph ? rgb('#d6246e') : base, col: ph ? rgb('#d6246e') : base, colA: (colored || ph) ? .9 : .42,
       to: null, seq: null, gas: gases.length ? rgb(mixColors(gases)) : null, gasA: 0, gasT: gases.length ? .3 : 0, ppt: null, pptAmt: 0, coat: null, coatT: 0, shrink: 1,
       fill: 0, fillT: 0, liqShare: wet ? 1 / liquids.length : 0, aqueous: aqueousMedium(ids), fp: freezePoint(ids) };
     solids = sol.map((sd, i) => makeSolid(sd, i, sol.length));
@@ -316,14 +364,21 @@ const Lab3D = (() => {
     $('#temp').hidden = true;
   }
   function applyFx(events) {
-    solids.forEach(s => { s.consumed = LabPhysics.consumed(s.sd.id, events); });
+    solids.forEach(s => {
+      s.consumed = LabPhysics.consumed(s.sd.id, events);
+      const input=quantities?.inputs.find(t=>t.id===s.sd.id), remaining=quantities?.reaction?.remaining[s.sd.id];
+      s.remaining=remaining!=null && input?.n ? Math.max(0,Math.min(1,remaining/input.n)) : null;
+      s.massScale=input?.mg!=null?Math.max(.15,Math.min(2.5,Math.cbrt(input.mg/10))):1;
+    });
     fx = {}; let sol, seq = null;
     for (const e of events) for (const k in e.fx) { if (k === 'sol') { if (e.fx.sol !== undefined) sol = e.fx.sol; } else if (k === 'solSeq') seq = (seq || []).concat(e.fx.solSeq); else if (e.fx[k]) fx[k] = e.fx[k]; }
     sc.to = null; sc.seq = null; sc.ppt = null; sc.pptAmt = 0; sc.coat = null; sc.coatT = 0; sc.shrink = 1; sc.gasTo = null; sc.col = sc.base.slice();
-    if (seq) { if (!sc.wet) { sc.wet = true; sc.level = .32; sc.liqShare = 1; sc.forceFill = true; } const st = sc.col.slice(); sc.seq = seq.sort((a, b) => a[0] - b[0]).map(([t, c]) => [t, c ? rgb(c) : st]); }
+    if (seq) { if (!sc.wet) { sc.wet = true; sc.level = .32; sc.liqShare = 1; sc.forceFill = true; } const st = sc.col.slice(); sc.seq = seq.sort((a, b) => a[0] - b[0]).map(([t, c]) => [t, c ? rgb(c) : st, c === '#bcd6ea' ? .42 : .9]); }
     else if (sc.wet && sol !== undefined) { sc.to = rgb(sol || '#bcd6ea'); sc.toA = sol ? .9 : .42; }
     else if (!sc.wet && sol) { sc.wet = true; sc.level = .3; sc.liqShare = 1; sc.forceFill = true; sc.to = rgb(sol); sc.toA = .9; }
     if (fx.ppt) sc.ppt = rgb(fx.ppt);
+    const precipitate=quantities?.reaction?.products.filter(t=>t.ph==='s').reduce((mg,t)=>mg+(t.mg || 0),0);
+    sc.pptMax=precipitate!=null?Math.min(1,Math.max(.01,precipitate/100)):1;
     if (fx.deposit || fx.coat) sc.coat = rgb(fx.deposit || fx.coat);
     if (fx.gas) sc.gasTo = rgb(fx.gas);
     if (fx.gasFade) sc.gasTo = 'fade';
@@ -338,16 +393,21 @@ const Lab3D = (() => {
   function showAll() { sc.fill = sc.fillT = sc.wet ? 1 : 0; sc.gasA = sc.gasT; for (const s of solids) { s.mesh.visible = true; s.mesh.position.copy(s.mesh.userData.base); s.grow = 1; } bottles.forEach(b => { if (b.userData.content) b.userData.content.scale.y = .35; }); }
   function finish() {
     if (sc.to) { sc.col = sc.to; sc.colA = sc.toA; sc.to = null; }
-    if (sc.seq) { sc.col = sc.seq[sc.seq.length - 1][1]; sc.colA = .9; sc.seq = null; }
-    if (sc.ppt) sc.pptAmt = 1; if (sc.coat) sc.coatT = 1; if (fx.dissolve) sc.shrink = .45;
+    if (sc.seq) { sc.col = sc.seq[sc.seq.length - 1][1]; sc.colA = sc.seq[sc.seq.length - 1][2]; sc.seq = null; }
+    if (sc.ppt) sc.pptAmt = sc.pptMax; if (sc.coat) sc.coatT = 1; if (fx.dissolve) sc.shrink = .45;
     if (sc.gasTo) { if (sc.gasTo === 'fade') sc.gasA = 0; else { sc.gas = sc.gasTo; sc.gasA = .32; } sc.gasTo = null; }
   }
   function react(events, opt = {}) {
     if (!sc) return 0;
     speed = clamp(opt.speed || 1, .45, 2.4);
-    if (opt.noPour && pour === null && rxT >= 0) { applyFx(events); rxT = clock; if (RM.matches) finish(); queueMicrotask(() => opt.onReady?.()); return 0; }
-    build(sc.ids); applyFx(events);
+    if (opt.noPour && pour === null && rxT >= 0) { quantities=opt.quantities || quantities;applyFx(events); rxT = clock; if (RM.matches) finish(); queueMicrotask(() => opt.onReady?.()); return 0; }
+    build(sc.ids, opt.doses || doseLedger); quantities=opt.quantities || null; applyFx(events);
     if (RM.matches) { showAll(); finish(); rxT = clock; queueMicrotask(() => opt.onReady?.()); return 0; }
+    if(opt.pipette && pipette) {
+      showAll();const ml=Object.keys(doseLedger).reduce((v,id)=>v+ChemistryQuant.total(id,doseLedger[id]).ml,0), before=Math.max(0,ml-(opt.pipetteMl || ml));
+      sc.fill=sc.fillT=before>0?fluidHeight(before)/fluidHeight(ml):0;
+      pipetteMotion={start:clock,id:opt.pipette,onReady:opt.onReady,startFill:sc.fill};return 1800;
+    }
     const n = bottles.length, dur = (n - 1) * 1.45 + 1.75;
     pour = { t0: clock, n, dur, last: 0, onReady: opt.onReady };
     return dur * 1000;
@@ -426,6 +486,18 @@ const Lab3D = (() => {
     hotLight.intensity = T > 420 ? (T - 420) / 480 * 2.2 : 0;
     gauzeC.material.emissive.setRGB(T > 380 ? (T - 380) / 520 * .9 : 0, T > 380 ? (T - 380) / 520 * .22 : 0, 0);
     // переливание
+
+    if(pipetteMotion && pipette) {
+      const tDose=(clock-pipetteMotion.start)/1000, u=Math.min(1,tDose/.45), back=Math.max(0,Math.min(1,(tDose-1.35)/.45));
+      const reach=Math.sin(u*Math.PI/2)*(1-back), tip=new THREE.Vector3(.03,T3.HN+.15,0);
+      pipette.position.lerpVectors(pipetteHome,tip,reach);pipette.rotation.z=-.32*(1-reach);
+      if(tDose>.6)sc.fillT=lerp(pipetteMotion.startFill,1,Math.min(1,(tDose-.6)/.65));
+      if(tDose>.6 && tDose<1.25){
+        dropMat.color.set(getSub(pipetteMotion.id).color || '#bcd6ea').convertSRGBToLinear();
+        LabPhysics.emit(drops,5,dt,()=>({x:.03,y:T3.HN+.12,z:0,vx:0,vy:-.6,vz:0,s:.025}));
+      }
+      if(tDose>=1.8){const ready=pipetteMotion.onReady;pipetteMotion=null;sc.fillT=1;pipette.position.copy(pipetteHome);pipette.rotation.z=-.32;rxT=clock;ready?.();}
+    }
     if (pour) {
       const tp = (now - pour.t0) / 1000; let streamOn = false;
       bottles.forEach((b, i) => {
@@ -476,14 +548,14 @@ const Lab3D = (() => {
     sc.fill = lerp(sc.fill, sc.fillT, LabPhysics.ease(5, dt));
     const lqY = sc.wet ? .025 + sc.level * T3.HB * sc.fill : .05;
     setLiquidH(sc.wet ? lqY : 0);
-    wave.time.value = t; wave.level.value = liqH; wave.amplitude.value = sc.wet && T > sc.fp && !fx.ice && !RM.matches ? (pour ? .025 : .006) : 0;
+    wave.time.value = t; wave.level.value = liqH; wave.amplitude.value = sc.wet && T > sc.fp && !fx.ice && !RM.matches ? (pipetteMotion ? .018 : (clock-agitation)/1000<2 ? .06*(1-(clock-agitation)/2000) : pour ? .025 : .006) : 0;
     meniscus.visible = liquid.visible; meniscus.position.y = liqH + .006; meniscus.scale.setScalar(Math.max(.01, T3.rAt(liqH) - .037));
     // реакция
     if (p >= 0 && !RM.matches) {
       const k = clamp((p - .3) / 2.5, 0, 1);
       if (sc.to) { sc.col = mixRGB(sc.col, sc.to, LabPhysics.ease(1 + k * 3, dt)); sc.colA = lerp(sc.colA, sc.toA, LabPhysics.ease(2, dt)); }
-      if (sc.seq) { const q = sc.seq; let i = 0; while (i < q.length - 1 && p >= q[i + 1][0]) i++; if (i >= q.length - 1) sc.col = q[q.length - 1][1]; else { const [t0, c0] = q[i], [t1, c1] = q[i + 1]; sc.col = mixRGB(c0, c1, clamp((p - t0) / Math.max(.3, (t1 - t0) * .6), 0, 1)); } sc.colA = lerp(sc.colA, .9, LabPhysics.ease(3, dt)); }
-      if (sc.ppt && p > 1.8) sc.pptAmt = Math.min(1, sc.pptAmt + .3 * dt * speed);
+      if (sc.seq) { const q = sc.seq; let i = 0; while (i < q.length - 1 && p >= q[i + 1][0]) i++; if (i >= q.length - 1) sc.col = q[q.length - 1][1]; else { const [t0, c0] = q[i], [t1, c1] = q[i + 1]; sc.col = mixRGB(c0, c1, clamp((p - t0) / Math.max(.3, (t1 - t0) * .6), 0, 1)); } sc.colA = lerp(sc.colA, q[i][2], LabPhysics.ease(3, dt)); }
+      if (sc.ppt && p > 1.8) sc.pptAmt = Math.min(sc.pptMax, sc.pptAmt + .3 * dt * speed * sc.pptMax);
       if (sc.coat) sc.coatT = Math.min(1, sc.coatT + .36 * dt * speed);
       if (fx.dissolve) sc.shrink = Math.max(.45, sc.shrink - .09 * dt * speed);
       if (sc.gasTo) { if (sc.gasTo === 'fade') sc.gasA = Math.max(0, sc.gasA - .24 * dt); else { sc.gas = sc.gas ? mixRGB(sc.gas, sc.gasTo, LabPhysics.ease(2, dt)) : sc.gasTo; sc.gasA = Math.min(.32, sc.gasA + .24 * dt); } }
@@ -506,8 +578,8 @@ const Lab3D = (() => {
       if (sc.coat && sc.coatT > 0) m.material.color.copy(toC(mixRGB(u.col, sc.coat, sc.coatT * .85)));
       const elapsed = Math.max(0, p);
       const dissolved = sc.wet && s.soluble && p >= 0 ? Math.exp(-elapsed * .65) : 1;
-      const used = s.consumed && p >= 0 ? Math.max(.04, 1 - elapsed / 6) : 1;
-      const sh = Math.min(dissolved, used), melt = fx.melt && p >= 0 ? clamp(p / 2, 0, 1) : 0;
+      const used = s.consumed && p >= 0 ? (s.remaining == null ? Math.max(.04,1-elapsed/6) : Math.cbrt(1-(1-s.remaining)*Math.min(1,elapsed/6))) : 1;
+      const sh = Math.min(dissolved, used) * (s.massScale || 1), melt = fx.melt && p >= 0 ? clamp(p / 2, 0, 1) : 0;
       m.visible = g > 0 && sh > .04;
       if (sc.wet && m.visible) m.position.y = lerp(m.position.y, s.floats ? lqY : u.base.y, LabPhysics.ease(4, dt));
       m.scale.set(g * sh * (1 + melt * .6), g * u.sy * sh * (1 - melt * .55), g * sh * (1 + melt * .6));
@@ -555,7 +627,9 @@ const Lab3D = (() => {
   T3.linearize(scene);
   requestAnimationFrame(frame);
   return {
-    setScene(list) { build(list); },
+    setScene(list, heat, doses) { build(list, doses || {}); },
+    aerate() { agitation=clock; },
+    assetStatus() { return {models:Object.keys(models),pipette:!!pipette}; },
     react, resize, setTemp(v) { T = v; }, setHeat(v) { },
     resetCamera,
     setPaused(v) { paused = v; },

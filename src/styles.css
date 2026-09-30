@@ -524,3 +524,34 @@ body{background:radial-gradient(ellipse at 15% 0,#17364c 0,transparent 45%),radi
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important}.btn:hover,.mode:hover,.ing:hover{transform:none}}
 
 @media(max-width:760px),(orientation:portrait) and (max-width:1024px){.thermo .tube{width:auto}.hero-main h1{max-width:100%}}
+
+/* Precision bench: forms stay outside the 3D scene on every screen size. */
+.dosing { margin:14px 0; padding:20px; }
+.dose-head,.dose-footer {display:flex;justify-content:space-between;align-items:center;gap:16px;}
+.dose-head h2 {font-size:20px;margin:5px 0 14px;}
+.dose-resolution {font:12px var(--f-mono);color:var(--muted);}
+.dose-grid {display:grid;grid-template-columns:1.6fr 1.2fr 1fr 1fr;gap:12px;align-items:end;}
+.dose-grid label {display:flex;flex-direction:column;gap:7px;font-size:12px;color:var(--muted);min-width:0;}
+.dose-grid input,.dose-grid select {width:100%;min-width:0;min-height:44px;border:1px solid #355363;background:#102631;color:#e6f5f8;border-radius:10px;padding:10px;font:14px var(--f-body);}
+.dose-grid select option,.dose-grid select optgroup {background:#102631;}
+.dose-grid [hidden] {display:none;}
+.dose-footer {margin-top:14px;align-items:flex-start;}
+.dose-presets,.dose-actions,.product-chips {display:flex;gap:8px;flex-wrap:wrap;}
+.dose-preview {margin:10px 0;}
+.dose-status {font-size:12px;color:#9bddbc;margin:10px 0 0;}
+.quantity-summary {padding:20px;margin-bottom:14px;}
+.quantity-table-wrap {overflow:auto;}
+.quantity-summary table {width:100%;border-collapse:collapse;font-size:13px;margin:12px 0;}
+.quantity-summary th,.quantity-summary td {text-align:left;padding:10px 8px;border-bottom:1px solid #355363;}
+.quantity-summary th {color:var(--muted);font-weight:500;}
+.quantity-summary td:not(:first-child) {font-family:var(--f-mono);white-space:nowrap;}
+.product-chips span {padding:8px 12px;background:#173948;border:1px solid #355363;border-radius:8px;font-size:13px;}
+.asset-status {position:absolute;bottom:10px;left:12px;font:10px var(--f-mono);color:#91b5c4;pointer-events:none;}
+@media(max-width:760px) {
+  .dosing,.quantity-summary {padding:14px;}
+  .dose-head,.dose-footer {align-items:flex-start;flex-direction:column;gap:6px;}
+  .dose-grid {grid-template-columns:1fr 1fr;gap:10px;}
+  .dose-actions {width:100%;}.dose-actions button {flex:1;padding:11px 8px;font-size:12px;}
+  .dose-resolution {margin-bottom:10px;}.quantity-summary table {font-size:11px;}
+  .lab-tools {flex-wrap:wrap;}
+}
