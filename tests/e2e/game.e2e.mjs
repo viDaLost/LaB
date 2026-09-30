@@ -56,3 +56,53 @@ test('телефон: вёрстка без горизонтальной про�
   assert.equal(await page.isHidden('#resCard'), true, 'карточка результата не должна появиться после очистки');
   assert.deepEqual(errs, []); await page.close();
 });
+
+test('управление лабораторией: паспорт, пауза, графика и отмена результата', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' });
+  const errs = watchErrors(page);
+  await page.goto(url, { waitUntil: 'domcontentloaded' }); await page.click('[data-go="free"]');
+  await page.fill('#stripSearch', 'натрий'); await page.click('.ing[data-id="Na"]');
+  assert.match(await page.textContent('#specimenPanel'), /0,97/);
+  assert.equal(await page.getAttribute('.ing[data-id="Na"]', 'aria-pressed'), 'true');
+  await page.click('#quality'); assert.equal(await page.getAttribute('#quality', 'aria-pressed'), 'true');
+  await page.click('#cameraReset'); await page.click('#pauseSim');
+  assert.equal(await page.getAttribute('#pauseSim', 'aria-pressed'), 'true');
+  await page.click('#clear'); await page.click('[data-go="map"]'); await page.locator('.node:not([disabled])').first().click();
+  await page.click('.ing[data-id="hcl"]'); await page.click('.ing[data-id="naoh"]');
+  await page.evaluate(() => { document.querySelector('#go').click(); document.querySelector('#clear').click(); });
+  await page.waitForTimeout(500);
+  assert.equal(await page.isHidden('#resCard'), true); assert.equal(await page.isHidden('#modal'), true);
+  await page.close(); assert.deepEqual(errs, []);
+});
+
+test('на телефоне результат не перекрывает сцену и термометр остаётся доступным', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
+  const errs = watchErrors(page);
+  await page.goto(url, { waitUntil: 'domcontentloaded' }); await page.tap('[data-go="free"]'); await page.tap('[data-show="3"]');
+  await page.waitForSelector('#resCard:not([hidden])');
+  const geometry = await page.evaluate(() => {
+    const res = document.querySelector('#resCard').getBoundingClientRect(), scene = document.querySelector('.canvas-wrap').getBoundingClientRect();
+    return { clear: res.bottom <= scene.top, width: document.documentElement.scrollWidth, tube: document.querySelector('#tTube').clientWidth };
+  });
+  assert.equal(geometry.clear, true); assert.equal(geometry.width, 390); assert.ok(geometry.tube > 60);
+  await page.tap('[data-t="100"]'); assert.match(await page.textContent('#tVal'), /100/);
+  assert.deepEqual(errs, []); await page.close();
+});
+
+test('без WebGL работают химия, паспорт и температурные состояния', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+  const errs = watchErrors(page);
+  await page.addInitScript(() => {
+    const getContext = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function(type, ...args) { return type === 'webgl' || type === 'webgl2' ? null : getContext.call(this, type, ...args); };
+  });
+  await page.goto(url, { waitUntil: 'domcontentloaded' }); await page.click('#ctaPlay');
+  await page.click('.ing[data-id="hcl"]'); await page.click('.ing[data-id="naoh"]'); await page.click('#go');
+  await page.waitForSelector('#modal:not([hidden])'); await page.click('#mStay');
+  assert.equal(await page.isVisible('#lab'), true); assert.equal(await page.isVisible('#cameraReset'), false);
+  assert.match(await page.textContent('#report'), /Нейтрализация/);
+  await page.click('[data-t="-20"]'); await page.waitForTimeout(600);
+  assert.match(await page.textContent('#report'), /Замерзание/);
+  await page.click('#pauseSim'); assert.equal(await page.getAttribute('#pauseSim', 'aria-pressed'), 'true');
+  assert.deepEqual(errs, []); await page.close();
+});

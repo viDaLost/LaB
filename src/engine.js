@@ -606,10 +606,10 @@ cur('K Cl', { eq: '2K(s) + Cl2(g) -> 2KCl(s)', type: 'Соединение · О
 cur('Br K', { eq: '2K(s) + Br2(l) -> 2KBr(s)', type: 'Соединение · ОВР', obs: ['Взрыв при соприкосновении'], why: 'Калий с жидким бромом реагирует взрывообразно (натрий — значительно спокойнее).', danger: 'Взрыв с разбрызгиванием брома.', fx: { boom: true, flame: '#b98ce0' }, tags: ['boom'] });
 
 // с участием реактивов
-cur('h2o2 mno2', { eq: '2H2O2(aq) -> 2H2O(l) + O2(g)', over: 'MnO₂', type: 'Разложение · катализ', obs: ['Бурное вспенивание', 'Тлеющая лучинка у горлышка ярко вспыхивает — это кислород', 'Чёрный MnO₂ в конце остаётся тем же — это катализатор'],
-  why: 'Без катализатора перекись разлагается месяцами. MnO₂ открывает путь с меньшей энергией активации, но сам в реакции не расходуется.', fx: { bubbles: '#ffffff', foam: true }, tags: ['catalysis'] });
+cur('h2o2 mno2', { eq: '2H2O2(aq) -> 2H2O(l) + O2(g)', over: 'MnO₂', type: 'Разложение · катализ', obs: ['Выделяются пузырьки бесцветного кислорода', 'Тлеющая лучинка у горлышка ярко вспыхивает — это кислород', 'Чёрный MnO₂ в конце остаётся тем же — это катализатор'],
+  why: 'Без катализатора перекись разлагается месяцами. MnO₂ открывает путь с меньшей энергией активации, но сам в реакции не расходуется.', fx: { bubbles: '#ffffff' }, tags: ['catalysis'] });
 cur('h2o2 ki', { eq: '2H2O2(aq) -> 2H2O(l) + O2(g)', over: 'I⁻', type: 'Разложение · катализ', obs: ['Бурно выделяется кислород; с добавкой моющего средства получилась бы «зубная паста для слона»', 'Раствор желтеет, потому что часть иодид-ионов окисляется до I₂'],
-  why: 'Иодид-ион работает как катализатор: H₂O₂ + I⁻ → H₂O + IO⁻, затем H₂O₂ + IO⁻ → H₂O + O₂ + I⁻.', fx: { bubbles: '#ffffff', foam: true, sol: '#d9b25a' }, tags: ['catalysis'] });
+  why: 'Иодид-ион работает как катализатор: H₂O₂ + I⁻ → H₂O + IO⁻, затем H₂O₂ + IO⁻ → H₂O + O₂ + I⁻.', fx: { bubbles: '#ffffff', sol: '#d9b25a' }, tags: ['catalysis'] });
 cur('caoh2 co2', { eq: 'Ca^2+(aq) + 2OH^-(aq) + CO2(g) -> CaCO3(s) + H2O(l)', mol: 'Ca(OH)2(aq) + CO2(g) -> CaCO3(s) + H2O(l)', type: 'Качественная реакция', obs: ['Прозрачная известковая вода мутнеет', 'При избытке CO₂ муть исчезает: CaCO₃ + CO₂ + H₂O → Ca(HCO₃)₂'],
   why: 'Это стандартная проба на углекислый газ. Так же образуются сталактиты — только в обратном направлении.', fx: { ppt: '#f5f5f2', bubbles: '#ffffff' }, tags: ['ppt'] });
 cur('co2 naoh', { eq: 'CO2(g) + 2OH^-(aq) -> CO3^2-(aq) + H2O(l)', mol: 'CO2(g) + 2NaOH(aq) -> Na2CO3(aq) + H2O(l)', type: 'Кислотный оксид + щёлочь', obs: ['Видимых изменений нет, но газ поглощается'], why: 'CO₂ — кислотный оксид. Щёлочь связывает его в карбонат: так очищают воздух на подводных лодках.' });
@@ -1187,6 +1187,7 @@ function single(id, heat) {
   if (DECOMP[id]) { const d = DECOMP[id]; return ev({ curKey: 'heat:' + id, type: d.type, source: 'curated', subs: [sub(d.eq)], cond: d.cond, obs: d.obs, why: d.why, fx: Object.assign({ bubbles: '#ffffff' }, d.fx || {}), tags: d.tags || [] }); }
   if (id === 'h2o') return PHYS('Кипение', 'При 100 °C вода закипает. Это физический процесс: молекулы H₂O не меняются, лишь рвутся водородные связи между ними. На испарение моля воды уходит 44 кДж.', { subs: [sub('H2O(l) -> H2O(g)')], fx: { bubbles: '#ffffff', steam: true }, tags: ['endo'] });
   if (S.kind === 'rg') {
+    if (S.id === 'h2so4c') return PHYS('Нагревание жидкости', 'Концентрированная серная кислота не является водным раствором в модели. Фазовые переходы и разложение при сильном нагреве здесь не рассчитаны; кипение воды к этому веществу не применяется.');
     const cats = ionsOf(S).map(x => x[0].split('^')[0]).filter(c => FLAME[c]);
     if (cats.length) {
       const [col, name, lam] = FLAME[cats[0]];
@@ -1198,7 +1199,7 @@ function single(id, heat) {
     return PHYS('Нагревание', `${S.name}: раствор нагревается и закипает. Состав вещества не меняется.`, { fx: { bubbles: '#ffffff' } });
   }
   const e = S.el, mp = MP[e.sym];
-  if (e.sym === 'I') return PHYS('Возгонка', 'Иод при нагревании переходит из твёрдого состояния прямо в газ, минуя жидкость. Колбу заполняют фиолетовые пары, а у холодного горлышка снова оседают кристаллы.', { fx: { gas: '#7b3fa0' } });
+  if (e.sym === 'I') return PHYS('Возгонка', 'При умеренном нагреве твёрдый иод сублимирует, образуя фиолетовые пары. Это не исключает жидкую фазу: при атмосферном давлении иод также плавится примерно при 114 °C и кипит около 184 °C.', { fx: { gas: '#7b3fa0' } });
   if (e.sym === 'S') return PHYS('Плавление', 'Сера плавится при 115 °C в жёлтую жидкость. Выше 160 °C кольца S₈ рвутся и сцепляются в длинные цепи: расплав темнеет и становится вязким, как мёд.', { fx: { coat: '#b8561a' } });
   if (e.sym === 'Hg') return PHYS('Испарение', 'Ртуть испаряется уже при комнатной температуре, а нагрев многократно ускоряет процесс.', { danger: 'Пары ртути ядовиты — нагревать ртуть в открытой посуде нельзя.' });
   if (e.st === 'g') return PHYS('Нагревание газа', `${e.name} расширяется при нагреве, но без второго реагента химической реакции нет.`);
@@ -1349,12 +1350,13 @@ function catalog() {
 
 /* ---------- Температура ---------- */
 const fmtT0 = T => (T < 0 ? '−' : '') + String(Math.abs(T)).replace('.', ',');
-// Реальные пороги: температура воспламенения, разложения или начала реакции, °C
+// Ориентиры для учебного сценария: зависят от давления, состава, поверхности и способа инициирования.
 const TMIN = { 'H+O': 550, 'Cl+H': 250, 'Br+H': 300, 'H+I': 350, 'H+S': 200, 'C+O': 400, 'O+S': 250, 'Cl+S': 150, 'C+S': 850, 'F+Xe': 400, 'Cl+F': 250, 'Cl+Si': 600, 'B+Cl': 500, 'H+Se': 400, 'P+S': 200,
   'Cl+Na': 100, 'Na+O': 120, 'K+O': 80, 'Li+O': 200, 'Mg+O': 470, 'Mg+N': 500, 'Al+O': 650, 'Al+I': 120, 'Fe+S': 450, 'Fe+O': 350, 'Cl+Fe': 250, 'Cu+O': 300, 'Cu+S': 400, 'Cl+Cu': 300, 'S+Zn': 450, 'Au+Cl': 200,
   'Mg+co2': 500, 'Al+fe2o3': 850, 'H+cuo': 300, 'C+cuo': 700, 'H+fe2o3': 500, 'Cu+h2so4c': 150, 'cuso4+glucose+naoh': 70,
-  'heat:caco3': 840, 'heat:nahco3': 80, 'heat:nh4cl': 340, 'heat:kmno4': 240, 'heat:h2o2': 60, 'heat:cocl2': 60, 'heat:sucrose': 190 };
+  'heat:caco3': 840, 'heat:nahco3': 80, 'heat:nh4cl': 340, 'heat:kmno4': 240, 'heat:h2o2': 60, 'heat:cocl2': 60, 'heat:sucrose': 190, 'heat:S': 115, 'heat:I': 50 };
 function tminOf(e) {
+  if (e.pair && e.pair.length === 1 && TMIN['heat:' + e.pair[0]] != null) return TMIN['heat:' + e.pair[0]];
   if (e.curKey && TMIN[e.curKey] != null) return TMIN[e.curKey];
   if (e.type === 'Кипение') return 100;
   if (e.kind === 'flame') return 500;
@@ -1364,17 +1366,23 @@ function tminOf(e) {
   return 300;
 }
 const evSig = e => e.kind + '|' + e.type + '|' + e.subs.map(s => eqText(s.eq)).join(';');
-const rateAt = T => Math.pow(2, (T - 25) / 10);
-function freezePoint(core) { return core.every(i => i === 'h2o' || !wetSub(getSub(i))) ? 0 : -7; }
+// Animation multiplier only; no activation energies or rate laws are specified.
+const rateAt = T => Math.pow(2, (Math.max(5, Math.min(65, T)) - 25) / 10);
+function aqueousMedium(core) { return core.some(i => { const S = getSub(i); return S && (S.ph === 'aq' || i === 'h2o'); }); }
+// -7 °C is a scenario threshold, not a calculated property of an unspecified solution.
+function freezePoint(core) {
+  if (!aqueousMedium(core)) return -Infinity;
+  return core.every(i => { const S = getSub(i); return i === 'h2o' || (S && !wetSub(S) && !S.dis); }) ? 0 : -7;
+}
 function analyzeT(ids, T) {
   const core = ids.filter(i => i !== 'php' && i !== 'starch');
-  const wet = core.some(i => wetSub(getSub(i)));
-  const fp = freezePoint(core);
+  const wet = aqueousMedium(ids);
+  const fp = freezePoint(ids);
   if (wet && T <= fp) {
     const pure = fp === 0;
     return [finalize(PHYS('Замерзание', pure
       ? `При ${fmtT0(T)} °C вода замёрзла: молекулы H₂O выстроились в кристаллическую решётку льда. Реакции в твёрдом льду почти не идут — частицам не сдвинуться с места.`
-      : `При ${fmtT0(T)} °C раствор замёрз. Растворы замерзают ниже 0 °C: растворённые ионы мешают воде кристаллизоваться (криоскопия, для 1–2 М растворов ≈ −4…−7 °C). Во льду ионы не двигаются, и реакция не идёт.`, { fx: { ice: true } }), core)];
+      : `Показана условная кристаллизация раствора при ${fmtT0(T)} °C. Порог −7 °C задан для игрового сценария: реальная температура зависит от растворителя и концентрации, которые здесь не рассчитываются. Кристаллизация замедляет перенос частиц; часть раствора может оставаться жидкой.`, { fx: { ice: true } }), core)];
   }
   const cold = analyze(ids, false);
   let out = cold;
@@ -1390,6 +1398,14 @@ function analyzeT(ids, T) {
     const hot = analyze(ids, true);
     cold.forEach((c, i) => { const h = hot[i]; if (h && evSig(c) !== evSig(h) && (c.needHeat || c.kind === 'info' || c.kind === 'none')) c.needT = tminOf(h); });
   }
+  if (core.length === 1 && core[0] === 'I' && T >= 114) {
+    out = [finalize(T < 184
+      ? PHYS('Плавление иода', 'При атмосферном давлении иод плавится около 114 °C. Над тёмным расплавом есть фиолетовые пары.', { fx: { melt: true, gas: '#7b3fa0' } })
+      : PHYS('Кипение иода', 'При атмосферном давлении иод кипит около 184 °C; образуются фиолетовые пары.', { fx: { gas: '#7b3fa0' } }), core)];
+  }
+  if (core.length === 1 && core[0] === 'S' && T >= 115) {
+    out = [finalize(PHYS('Плавление серы', 'Сера плавится примерно при 115 °C. Выше 160 °C расплав становится более вязким из-за образования цепей; цвет и вязкость зависят от температуры.', { fx: { melt: true, coat: T >= 160 ? '#b8561a' : '#e3c534' } }), core)];
+  }
   if (core.length === 1 && EL[core[0]] && T >= 50) {
     const e = EL[core[0]], mp = MP[e.sym];
     if (mp !== undefined && !['I', 'S', 'Hg', 'Br'].includes(e.sym) && e.st === 's') {
@@ -1398,9 +1414,9 @@ function analyzeT(ids, T) {
     }
   }
   if (wet && T >= 100 && T < 160 && !out.some(e => e.type === 'Кипение'))
-    out.push(finalize(PHYS('Кипение', 'Вода в колбе кипит. Чистая вода кипит при 100 °C, раствор — чуть выше: растворённые вещества повышают температуру кипения (эбулиоскопия).', { fx: { boil: true, steam: true } }), core));
+    out.push(finalize(PHYS('Кипение', 'Показано кипение водной среды при атмосферном давлении. Для чистой воды ориентир — 100 °C; для раствора температура зависит от состава. Температура нагревателя не равна температуре кипящей жидкости.', { fx: { boil: true, steam: true } }), core));
   if (wet && T >= 160 && !out.some(e => e.type === 'Кипение'))
-    out.push(finalize(PHYS('Выпаривание', `При ${fmtT0(T)} °C вода бурно выкипает: раствор упаривается, и на дне остаются сухие соли. В реальной лаборатории так выделяют растворённое вещество.`, { fx: { boil: true, steam: true } }), core));
+    out.push(finalize(PHYS('Выпаривание', `Нагреватель установлен на ${fmtT0(T)} °C. Показано упаривание: пока вода остаётся в открытой колбе, жидкость находится около своей температуры кипения. Сухой остаток нагревается дальше; его состав и летучесть здесь количественно не рассчитываются.`, { fx: { boil: true, steam: true } }), core));
   return out;
 }
 function requiredT(ids) {
@@ -1409,4 +1425,4 @@ function requiredT(ids) {
   return t;
 }
 
-if (typeof module !== 'undefined') module.exports = { analyzeT, requiredT, rateAt, catalog, analyze, mk, BAD_EQ, CUR, ELS, REAGENTS, getSub, eqText, hf, key };
+if (typeof module !== 'undefined') module.exports = { analyzeT, requiredT, rateAt, freezePoint, aqueousMedium, catalog, analyze, mk, BAD_EQ, CUR, ELS, REAGENTS, getSub, eqText, hf, key };
